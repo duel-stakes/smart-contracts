@@ -48,7 +48,8 @@ $ anvil
 ### Deploy
 
 ```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+# $ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+$ forge script script/DuelStakes.s.sol:DeployScript --rpc-url sepolia --broadcast --etherscan-api-key ethereum-sepolia --verify -vvvv
 ```
 
 ### Cast

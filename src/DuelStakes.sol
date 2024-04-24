@@ -29,7 +29,7 @@ contract duelStakes is Ownable,Pausable{
     //                                               ERC20 IDENTIFIER
     //----------------------------------------------------------------------------------------------------
 
-    IERC20 immutable _paymentToken;
+    IERC20 _paymentToken;
     address public _treasuryAccount;
     address public _operationManager;
 
@@ -235,6 +235,21 @@ contract duelStakes is Ownable,Pausable{
 
         emit claimedBet(_title, _eventDate, msg.sender);
     }
+    //----------------------------------------------------------------------------------------------------
+    //                                         MANAGEMENT SETTER FUNCTIONS
+    //----------------------------------------------------------------------------------------------------
+
+    function changeTreasury(address _treasury) public onlyOwner{
+        _treasuryAccount = _treasury;
+    }
+    
+    function changeOperations(address _operation) public onlyOwner{
+        _operationManager = _operation;
+    }
+    function changePayment(address _payment) public onlyOwner{
+        _paymentToken = IERC20(_payment);
+    }
+
     //----------------------------------------------------------------------------------------------------
     //                                             GETTER FUNCTIONS
     //----------------------------------------------------------------------------------------------------
