@@ -19,9 +19,9 @@ contract DeployScript is Script {
         // DEPLOYED
         // Mock Payment token sepolia :  0xC738EFf4f092e6D34FbFa8D6BAe129F9806387C6 (usa esse como token de pagamento)
         // Duel Stakes sepolia :  0x5d042F06531c3BcDB81002A992905e99166Cf471 (esse de duel stakes)
-
         //sep:0x4BDf96C56d85041377ddb0037c42b11F9fF9076a
         // uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        
         vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
 
         _mockERC20 = new mockERC20();
