@@ -5,14 +5,8 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
-// Duel Title: A brief description of the duel (for example, "Fighter A vs. Fighter B" or "Trump to win the Presidential Election").
-// Event Title: The name of the event.
-// Event Date/Time: When the event will take place.
-// Duel Closing Date/Time: The deadline for participants to enter the duel.
-// Picking Options: This includes the names of teams, candidate options, players, etc.
-// Description: Provides clarification on any potential misunderstandings about the duel. For example, in a soccer duel, Team A will be declared the winner of the duel if they win the match, including any extra time and penalties.
-// Resolution Rules: A detailed description of the method chosen to validate duel results after the event concludes.
-// Guaranteed Volume ($): The Duel Creator must specify an amount to be guaranteed for the duel. This serves both as a marketing tool and as an incentive for players to participate.
+///@author Waiandt.eth
+
 contract duelStakes is Ownable,Pausable{
 
     //----------------------------------------------------------------------------------------------------
