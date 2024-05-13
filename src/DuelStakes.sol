@@ -23,7 +23,7 @@ contract duelStakes is Ownable,Pausable{
     //                                               ERC20 IDENTIFIER
     //----------------------------------------------------------------------------------------------------
 
-    IERC20 _paymentToken;
+    IERC20 public _paymentToken;
     address public _treasuryAccount;
     address public _operationManager;
 
@@ -197,7 +197,7 @@ contract duelStakes is Ownable,Pausable{
             if (!success)
             revert transferDidNotSucceed();
             _aux.unclaimedPrizePool = 0;
-        }
+        }   
 
         emit duelBet(msg.sender, _amount, _option, keccak256(abi.encode(_eventDate,_title)));
 

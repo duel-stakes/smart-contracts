@@ -167,7 +167,7 @@ interface IDuelStakes{
     ///@param _title The title of the duel
     ///@param _timestamp The date in unix timestamp of the duel
     ///@return uint256,uint256,uint256,uint256,uint256 -> total prize pool, option 1 total, option 2 total, option 3 total, unclaimed pool
-    function getPrizes(string memory _title, uint256 _timestamp) external returns(uint256,uint256,uint256,uint256,uint256);
+    function getPrizes(string memory _title, uint256 _timestamp) external returns(uint256,uint256,uint256,uint256,uint256); 
 
     ///@dev This is the function that returns the creator of the duel
     ///@param _title The title of the duel

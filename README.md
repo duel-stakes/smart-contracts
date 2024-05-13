@@ -52,6 +52,12 @@ $ anvil
 $ forge script script/DuelStakes.s.sol:DeployScript --rpc-url sepolia --broadcast --etherscan-api-key ethereum-sepolia --verify -vvvv
 ```
 
+### Coverage
+```shell
+$ forge coverage --ir-minimum
+```
+
+
 ### Cast
 
 ```shell

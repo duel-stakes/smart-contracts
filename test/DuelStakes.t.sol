@@ -163,6 +163,8 @@ contract DuelStakesTest is Test {
         vm.prank(user,user);
         _duelStakes.claimBet(_title, _timestamp);
 
+        console.logBytes32(keccak256(abi.encode(_timestamp,_title)));
+
         assertEq(_dummyToken.balanceOf(user),total);
     }
 
