@@ -94,12 +94,11 @@ contract duelStakes is Ownable,Pausable{
     //----------------------------------------------------------------------------------------------------
 
     event duelCreatorChanged(address indexed _address, bool indexed _allowed);
-    event emergencyBlock(bytes32 indexed _duel);
-    event duelCreated(string indexed _title, uint256 indexed _eventDate, uint256 indexed _openAmount);
-    event duelBet(address indexed _user, uint256 indexed _amount, pickOpts indexed _pick, bytes32 _bet);
-    event betClosed(string indexed _title, uint256 indexed _eventDate, pickOpts indexed _winner);
-    event claimedBet(string indexed _title, uint256 indexed _eventDate, address indexed _winner);
-
+    event emergencyBlock(string _title, uint256 indexed _eventDate);
+    event duelCreated(string _title, uint256 indexed _eventDate, uint256 indexed _openAmount);
+    event duelBet(address indexed _user, uint256 indexed _amount, pickOpts indexed _pick, string _title, uint256 _eventDate);
+    event betClosed(string _title, uint256 indexed _eventDate, pickOpts indexed _winner);
+    event claimedBet(string _title, uint256 indexed _eventDate, address indexed _user, uint256 indexed _payment);
 
     //----------------------------------------------------------------------------------------------------
     //                                               MODIFIERS
@@ -159,7 +158,7 @@ contract duelStakes is Ownable,Pausable{
         _aux.blockedDuel = true;
         _aux.unclaimedPrizePool = 0;
 
-        emit emergencyBlock(keccak256(abi.encode(_eventDate,_title)));
+        emit emergencyBlock(_title,_eventDate);
     }
 
     //----------------------------------------------------------------------------------------------------
@@ -199,7 +198,7 @@ contract duelStakes is Ownable,Pausable{
             _aux.unclaimedPrizePool = 0;
         }   
 
-        emit duelBet(msg.sender, _amount, _option, keccak256(abi.encode(_eventDate,_title)));
+        emit duelBet(msg.sender, _amount, _option, _title,_eventDate);
 
     }
 
@@ -225,9 +224,9 @@ contract duelStakes is Ownable,Pausable{
     function claimBet(string calldata _title, uint256 _eventDate) notBlocked(_title, _eventDate) public whenNotPaused {
         betDuel storage _aux = _checkDuelExistence(_title,_eventDate);
         require(!_aux.userClaimed[msg.sender],"User already claimed");
-        _updateClaim(_aux, msg.sender);
+        uint256 _payment = _updateClaim(_aux, msg.sender);
 
-        emit claimedBet(_title, _eventDate, msg.sender);
+        emit claimedBet(_title, _eventDate, msg.sender, _payment);
     }
     //----------------------------------------------------------------------------------------------------
     //                                         MANAGEMENT SETTER FUNCTIONS
@@ -355,19 +354,19 @@ contract duelStakes is Ownable,Pausable{
         }
     }
 
-    function _updateClaim(betDuel storage _duel, address _claimer) internal {
+    function _updateClaim(betDuel storage _duel, address _claimer) internal returns (uint256 _payment) {
         if(_duel.releaseReward == pickOpts.opt1){
-            uint256 _payment = (_duel.userDeposits[_claimer]._amountOp1 * _duel.totalPrizePool) / _duel.opt1PrizePool;
+            _payment = (_duel.userDeposits[_claimer]._amountOp1 * _duel.totalPrizePool) / _duel.opt1PrizePool;
             _duel.userClaimed[_claimer] = true;
             _duel.unclaimedPrizePool -= _payment;
             _transferUserAmount(_payment);
         }else if(_duel.releaseReward == pickOpts.opt2){
-            uint256 _payment = (_duel.userDeposits[_claimer]._amountOp2 * _duel.totalPrizePool) / _duel.opt2PrizePool;
+            _payment = (_duel.userDeposits[_claimer]._amountOp2 * _duel.totalPrizePool) / _duel.opt2PrizePool;
             _duel.userClaimed[_claimer] = true;
             _duel.unclaimedPrizePool -= _payment;
             _transferUserAmount(_payment);
         }else if (_duel.releaseReward == pickOpts.opt3){
-            uint256 _payment = (_duel.userDeposits[_claimer]._amountOp2 * _duel.totalPrizePool) / _duel.opt2PrizePool;
+            _payment = (_duel.userDeposits[_claimer]._amountOp2 * _duel.totalPrizePool) / _duel.opt2PrizePool;
             _duel.userClaimed[_claimer] = true;
             _duel.unclaimedPrizePool -= _payment;
             _transferUserAmount(_payment);            

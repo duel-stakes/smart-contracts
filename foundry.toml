@@ -6,7 +6,7 @@ fs_permissions = [{ access = "read", path = "./"}]
 optimizer = true
 optimizer_runs = 200
 gas_reports = ["*"]
-solc = "0.8.23"
+solc = "0.8.20"
 evm_version = "cancun"
 remappings = [
     "@layerzerolabs/lz-evm-oapp-v2=lib/LayerZero-v2/oapp",
@@ -22,6 +22,8 @@ polygon-mumbai = { key = "${POLYGON_API_KEY}", url = "https://api-testnet.polygo
 ethereum-goerli = { key = "${ETHERSCAN_API_KEY}", url = "https://goerli.etherscan.io/api" }
 ethereum-sepolia = {key="${ETHERSCAN_API_KEY}",url="https://api-sepolia.etherscan.io/api"}
 optimism-mainnet = {key="${OPTIMISM_API_KEY}",url="https://api-optimistic.etherscan.io/api"}
+moonbase = {key="${MOONBEAM_API_KEY}",url="https://api-moonbase.moonscan.io/api"}
+moonbeam = {key="${MOONBEAM_API_KEY}",url="https://api-moonbeam.moonscan.io/api"}
 
 [rpc_endpoints]
 mainnet = "${ALCHEMY_MAINNET_URL}"
@@ -30,5 +32,7 @@ polygon = "${GOERLI_POLYGON_URL}"
 mumbai = "${ALCHEMY_MUMBAI_URL}"
 sepolia = "${ALCHEMY_SEPOLIA_URL}"
 optimism = "${ALCHEMY_OPTIMISM_URL}"
+moonbase = "https://rpc.api.moonbase.moonbeam.network"
+moonbeam = "INSERT_RPC_API_ENDPOINT"
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
