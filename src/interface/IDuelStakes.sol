@@ -87,11 +87,11 @@ interface IDuelStakes{
 
     ///@dev Function used to pause the contract interactions
     ///@notice Only the owner of the contract can interact
-    function pause()  external;
+    function pause() external;
     
     ///@dev Function used to unpause the contract interactions
     ///@notice Only the owner of the contract can interact
-    function unpause()  external;
+    function unpause() external;
     
     ///@dev This is the function that blocks a duel in an emergency case
     ///@notice Only the owner of the contract can interact

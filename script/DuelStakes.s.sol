@@ -28,8 +28,6 @@ contract DeployScript is Script {
 
         //DEPOLYED SEPOLIA V3
         // Duel Stakes sepolia :  0x8DEd422a09008ca39297fc1E495677916eBAcC91 (esse de duel stakes) /event emergencyBlock(string _title, uint256 indexed _eventDate)/    event duelBet(address indexed _user, uint256 indexed _amount, pickOpts indexed _pick, string _title, uint256 _eventDate);
-        
-
 
         //OPTIMISM: 
         //MULTISIG: 0x9E13eAccDb1d7D3d002cED2a7150f5dc64B7C91E
@@ -38,10 +36,10 @@ contract DeployScript is Script {
         //DUELSTAKES: 0x57E4056C9aDc66ecFe1E843fD50811D0da25D8B9
 
         //MOONBEAM
-        //MULTISIG : 
-        //OPERATION MANAGER : 
+        //MULTISIG : mbeam:0x76Ba2605bD6C5496ff041201880dF1A5dC12F4CC
+        //OPERATION MANAGER : 0x36657503e2bF76A239669Fbe5ca6FF200C8db376
         //USDT: 0xeFAeeE334F0Fd1712f9a8cc375f427D9Cdd40d73
-        //DUELSTAKES: 
+        //DUELSTAKES: 0xaBaAbF95182937c379de2Fc5689909e1F4C05BC2
         
         //MOONBASE
         //MULTISIG : 0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a
@@ -56,27 +54,27 @@ contract DeployScript is Script {
         
         vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
 
-        _mockERC20 = new mockERC20();
+        // _mockERC20 = new mockERC20();
         // _duelStakes = new duelStakes(_paymentSepolia,_tresurySepolia,_operationSepolia);
-        _duelStakes = new duelStakes(address(_mockERC20),0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a,0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a);
-        // _duelStakes = new duelStakes(0x94b008aA00579c1307B0EF2c499aD98a8ce58e58,0x9E13eAccDb1d7D3d002cED2a7150f5dc64B7C91E,0x36657503e2bF76A239669Fbe5ca6FF200C8db376);
+        // _duelStakes = new duelStakes(address(_mockERC20),0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a,0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a);
+        _duelStakes = new duelStakes(0xeFAeeE334F0Fd1712f9a8cc375f427D9Cdd40d73,0x76Ba2605bD6C5496ff041201880dF1A5dC12F4CC,0x36657503e2bF76A239669Fbe5ca6FF200C8db376);
 
-        console.log("Mock Payment token moonbase : ", address(_mockERC20));
+        // console.log("Mock Payment token moonbase : ", address(_mockERC20));
         console.log("Duel Stakes moonbase : ", address(_duelStakes));
 
-        duelStakes.betDuelInput memory _aux = duelStakes.betDuelInput({
-            duelTitle : "Test VS Test",
-            duelDescription : "This is a description of test vs test",
-            eventTitle : "Test function fighting test function",
-            eventTimestamp : block.timestamp + 120 days,
-            deadlineTimestamp : block.timestamp + 119 days,
-            duelCreator : 0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a,
-            initialPrizePool : 1 ether
-        });
+        // duelStakes.betDuelInput memory _aux = duelStakes.betDuelInput({
+        //     duelTitle : "Test VS Test",
+        //     duelDescription : "This is a description of test vs test",
+        //     eventTitle : "Test function fighting test function",
+        //     eventTimestamp : block.timestamp + 120 days,
+        //     deadlineTimestamp : block.timestamp + 119 days,
+        //     duelCreator : 0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a,
+        //     initialPrizePool : 1 ether
+        // });
 
-        _mockERC20.mint(2 ether);
-        _mockERC20.approve(address(_duelStakes), 1 ether);
-        _duelStakes.createDuel(_aux);
+        // _mockERC20.mint(2 ether);
+        // _mockERC20.approve(address(_duelStakes), 1 ether);
+        // _duelStakes.createDuel(_aux);
 
         vm.stopBroadcast();
     }

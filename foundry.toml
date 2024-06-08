@@ -33,6 +33,6 @@ mumbai = "${ALCHEMY_MUMBAI_URL}"
 sepolia = "${ALCHEMY_SEPOLIA_URL}"
 optimism = "${ALCHEMY_OPTIMISM_URL}"
 moonbase = "https://rpc.api.moonbase.moonbeam.network"
-moonbeam = "INSERT_RPC_API_ENDPOINT"
+moonbeam = "https://rpc.api.moonbeam.network"
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
