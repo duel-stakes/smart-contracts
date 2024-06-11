@@ -8,7 +8,7 @@ import {OApp, Origin, MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contract
 
 ///@author Waiandt.eth
 
-contract duelStakes is OApp,Pausable{
+contract duelStakesL0 is OApp,Pausable{
 
     //----------------------------------------------------------------------------------------------------
     //                                               STORAGE
@@ -97,7 +97,7 @@ contract duelStakes is OApp,Pausable{
     event duelCreatorChanged(address indexed _address, bool indexed _allowed);
     event emergencyBlock(string _title, uint256 indexed _eventDate);
     event duelCreated(string _title, uint256 indexed _eventDate, uint256 indexed _openAmount);
-    event duelBet(address indexed _user, uint256 indexed _amount, pickOpts indexed _pick, string _title, uint256 _eventDate);
+    event duelBet(address indexed _user, uint256 indexed _amount, pickOpts indexed _pick, string _title, uint256 _eventDate, uint256 _chain);
     event betClosed(string _title, uint256 indexed _eventDate, pickOpts indexed _winner);
     event claimedBet(string _title, uint256 indexed _eventDate, address indexed _user, uint256 indexed _payment);
 
@@ -117,6 +117,11 @@ contract duelStakes is OApp,Pausable{
     }
     modifier notBlockedMemory(string memory _title, uint256 _eventDate){
         if(duels[keccak256(abi.encode(_eventDate,_title))].blockedDuel)
+        revert duelIsBlocked();
+        _;
+    }
+    modifier notBlockedBytes32(bytes32 _id){
+        if(duels[_id].blockedDuel)
         revert duelIsBlocked();
         _;
     }
@@ -205,7 +210,7 @@ contract duelStakes is OApp,Pausable{
             _aux.unclaimedPrizePool = 0;
         }   
         
-        emit duelBet(msg.sender, _amount, _option, _title,_eventDate);
+        emit duelBet(msg.sender, _amount, _option, _title,_eventDate, block.chainid);
 
     }
 
@@ -318,6 +323,11 @@ contract duelStakes is OApp,Pausable{
         if(keccak256(abi.encodePacked(_aux.duelTitle)) != keccak256(abi.encodePacked(_title)))
         revert duelDoesNotExist();
     }
+    function _checkDuelExistence(bytes32 _id) internal view returns(betDuel storage _aux){
+        _aux = duels[_id];
+        if(_aux.duelCreator == address(0))
+        revert duelDoesNotExist();
+    }
 
     function _populateDuel(betDuelInput calldata _newDuel) internal{
         betDuel storage _aux = duels[keccak256(abi.encode(_newDuel.eventTimestamp,_newDuel.duelTitle))];
@@ -405,7 +415,7 @@ contract duelStakes is OApp,Pausable{
 
 
     function _lzReceive(
-        Origin calldata /* _origin*/,
+        Origin calldata /*_origin*/,
         bytes32 /* _guid */,
         bytes calldata payload,
         address, // Executor address as specified by the OApp.
@@ -413,22 +423,17 @@ contract duelStakes is OApp,Pausable{
     ) internal override {
         // Decode the payload to get the message
         // In this case, type is string, but depends on your encoding!
-        (bytes4 selector,string memory _title,uint256 _timestamp,pickOpts _opt,uint256 _amount,uint256 chainId) = abi.decode(payload, (bytes4,string,uint256,pickOpts,uint256,uint256));
-        if( selector == bytes4(bytes("_betOnDuel(string,uint256,pickOpts,uint256,uint256)"))){
-            _betOnDuel(_title,_timestamp,_opt,_amount,chainId);
-        }
-        
-        // emit Received(duel.duel, duel.user, duel.amount);
-        
+        if( bytes4(payload[:4]) == bytes4(keccak256("_betOnDuel(string,uint256,uint8,uint256,uint256,address)"))){
+            (,bytes32 _id,pickOpts _opt,uint256 _amount,uint256 chainId,address _user) = abi.decode(payload, (bytes4,bytes32,pickOpts,uint256,uint256,address));
+            _betOnDuel(_id,_opt,_amount,chainId,_user);
+        }        
     }
 
     //@note CHECK ALL MESSAGE SENDERS
-    function _betOnDuel(string memory _title, uint256 _eventDate, pickOpts _option, uint256 _amount, uint256 chainId) internal notBlockedMemory(_title, _eventDate) whenNotPaused{
-        betDuel storage _aux = _checkDuelExistence(_title,_eventDate);
+    function _betOnDuel(bytes32 _id, pickOpts _option, uint256 _amount, uint256 _chainId, address _user) internal notBlockedBytes32(_id) whenNotPaused{
+        betDuel storage _aux = _checkDuelExistence(_id);
         require(block.timestamp <= _aux.deadlineTimestamp, "Bet not possible due to time limit");
-        _checkAmount(_amount);
-        _transferAmount(_amount);
-        _depositPick(_amount,_option,msg.sender,_aux,chainId);
+        _depositPick(_amount,_option,_user,_aux,_chainId);
 
         if(_aux.unclaimedPrizePool <= _aux.totalPrizePool && _aux.unclaimedPrizePool != 0){
             bool success = _paymentToken.transfer(_aux.duelCreator, _aux.unclaimedPrizePool);
@@ -437,7 +442,7 @@ contract duelStakes is OApp,Pausable{
             _aux.unclaimedPrizePool = 0;
         }   
         
-        emit duelBet(msg.sender, _amount, _option, _title,_eventDate);
+        emit duelBet(_user, _amount, _option, _aux.duelTitle,_aux.eventTimestamp, _chainId);
 
     }
 

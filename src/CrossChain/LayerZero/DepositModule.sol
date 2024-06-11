@@ -32,7 +32,7 @@ contract DepositModule is OApp {
     //                                               STRUCTS
     //----------------------------------------------------------------------------------------------------
 
-     struct CreateDuelInput{
+    struct CreateDuelInput{
         string duelTitle;
         string duelDescription;
         string eventTitle;
@@ -68,11 +68,26 @@ contract DepositModule is OApp {
     }
 
     //change this to populate betDuel, choose duel based on the duel title and event timestamp of bytes32 key
-    struct Duel {
-        bytes32 duel;
-        address user;
-        uint256 amount;
+    struct Bet {
+        string _title;
+        uint256 _timestamp;
+        pickOpts _opt;
+        uint256 _amount;
     }
+
+    //----------------------------------------------------------------------------------------------------
+    //                                               ERRORS
+    //----------------------------------------------------------------------------------------------------
+
+    error amountEmpty();
+    error notEnoughBalance();
+    error notEnoughAllowance();
+    error transferDidNotSucceed();
+    error pickNotAvailable();
+
+    //----------------------------------------------------------------------------------------------------
+    //                                               CONSTRUCTOR
+    //----------------------------------------------------------------------------------------------------
 
     constructor(
         address _endpoint,
@@ -86,14 +101,53 @@ contract DepositModule is OApp {
         _operationManager = __operationManager;
     }
 
+    //----------------------------------------------------------------------------------------------------
+    //                                               INTERNAL
+    //----------------------------------------------------------------------------------------------------
+
+    function _checkAmount(uint256 _amount) internal view{
+        if(_amount == 0)
+        revert amountEmpty();
+
+        if(_paymentToken.balanceOf(msg.sender) < _amount)
+        revert notEnoughBalance();
+
+        if(_paymentToken.allowance(msg.sender, address(this)) < _amount)
+        revert notEnoughAllowance();
+    }
+
+    function _transferAmount(uint256 _amount) internal {
+        bool success = _paymentToken.transferFrom(msg.sender, address(this), _amount);
+        if (!success)
+        revert transferDidNotSucceed();
+    }
+
+    function _depositPick(uint256 _amount, pickOpts _pick, address sender,betDuel storage _duel) internal{
+        if(_pick == pickOpts.opt1){
+            _duel.userDeposits[sender]._amountOp1 += _amount;
+        }else if(_pick == pickOpts.opt2){
+            _duel.userDeposits[sender]._amountOp2 += _amount;
+        }else if (_pick == pickOpts.opt3){
+            _duel.userDeposits[sender]._amountOp3 += _amount;
+        }else{
+            revert pickNotAvailable();
+        }
+    }
+
+    //----------------------------------------------------------------------------------------------------
+    //                                               EXTERNAL PAYABLE
+    //----------------------------------------------------------------------------------------------------
+
     function betOnDuel(
         uint32 _dstEid,
-        Duel memory _duel,
+        Bet memory _duel,
         bytes calldata _options
     ) external payable {
-        // Encodes the message before invoking _lzSend.
-        // Replace with whatever data you want to send!
-        bytes memory _payload = abi.encode(bytes4(""),_duel);
+        _checkAmount(_duel._amount);
+        _transferAmount(_duel._amount);
+        bytes32 _id = keccak256(abi.encode(_duel._timestamp,_duel._title));
+        _depositPick(_duel._amount,_duel._opt,msg.sender,duels[_id]);
+        bytes memory _payload = abi.encode(bytes4(keccak256("_betOnDuel(string,uint256,uint8,uint256,uint256,address)")),_id,_duel._opt,_duel._amount,block.chainid,msg.sender);
         _lzSend(
             _dstEid,
             _payload,
@@ -105,6 +159,11 @@ contract DepositModule is OApp {
         );
     }
 
+
+    //----------------------------------------------------------------------------------------------------
+    //                                               CROSS-CHAIN MESSAGE
+    //----------------------------------------------------------------------------------------------------
+
     //@note implement a bytes4 to get what function you're interacting with
     function _lzReceive(
         Origin calldata /* _origin*/,
@@ -113,8 +172,6 @@ contract DepositModule is OApp {
         address, // Executor address as specified by the OApp.
         bytes calldata // Any extra data or options to trigger on receipt.
     ) internal override {
-        // Decode the payload to get the message
-        // In this case, type is string, but depends on your encoding!
         (bytes32 duel, uint8 opt, uint256 multiplier) = abi.decode(payload, (bytes32,uint8,uint256));
         duels[duel].releaseReward = pickOpts(opt);
         duels[duel].multiplier = multiplier;
