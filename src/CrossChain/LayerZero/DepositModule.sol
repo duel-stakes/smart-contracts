@@ -180,10 +180,12 @@ contract DepositModule is OApp {
 
     function quote(
         uint32 _dstEid,
-        bytes memory _message,
+        Bet memory _duel,
         bytes memory _options,
         bool _payInLzToken
     ) external view returns (MessagingFee memory) {
+        bytes32 _id = keccak256(abi.encode(_duel._timestamp,_duel._title));
+        bytes memory _message = abi.encode(bytes4(keccak256("_betOnDuel(string,uint256,uint8,uint256,uint256,address)")),_id,_duel._opt,_duel._amount,block.chainid,msg.sender);
         return _quote(_dstEid, _message, _options, _payInLzToken);
     }
 }

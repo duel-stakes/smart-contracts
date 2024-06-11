@@ -84,7 +84,7 @@ contract CrossChainTest is Test {
 
         MessagingFee memory fee = deposit.quote(
             eIdB,
-            abi.encode(newDuel),
+            newDuel,
             options,
             false
         );
@@ -94,7 +94,7 @@ contract CrossChainTest is Test {
         vm.expectEmit(true, true, false, true, address(receiver));
         emit duelStakesL0.duelBet(user, newDuel._amount, duelStakesL0.pickOpts(uint8(newDuel._opt)),newDuel._title, newDuel._timestamp,block.chainid);
 
-        deposit.betOnDuel{value: fee.nativeFee*101/100}(eIdB, newDuel, options); //@note needs a fee bump
+        deposit.betOnDuel{value: fee.nativeFee}(eIdB, newDuel, options);
         (uint256 amount1,uint256 amount2,uint256 amount3) = receiver.getUserDeposits(newDuel._title, newDuel._timestamp, block.chainid, user);
         console.log("Amount 1", amount1);
         console.log("Amount 2", amount2);
