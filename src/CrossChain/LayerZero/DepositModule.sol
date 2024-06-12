@@ -21,6 +21,14 @@ contract DepositModule is OApp {
     mapping (address => bool) public duelCreators;
 
     //----------------------------------------------------------------------------------------------------
+    //                                        CROSSCHAIN VARIABLES
+    //----------------------------------------------------------------------------------------------------
+
+    uint32 dstEid;
+    bytes options;
+    bool payInLzToken;
+
+    //----------------------------------------------------------------------------------------------------
     //                                               ERC20 IDENTIFIER
     //----------------------------------------------------------------------------------------------------
 
@@ -138,6 +146,11 @@ contract DepositModule is OApp {
     //                                               EXTERNAL PAYABLE
     //----------------------------------------------------------------------------------------------------
 
+    //@note use _dstEid and _options from storage variables
+    //@note use bytes4 "_betOnDuel" from storage variables
+    //@note implement create a new duel
+    //@note implement release duel (internal function)
+    //@note implement repay guaranteed (internal function)
     function betOnDuel(
         uint32 _dstEid,
         Bet memory _duel,
@@ -165,6 +178,8 @@ contract DepositModule is OApp {
     //----------------------------------------------------------------------------------------------------
 
     //@note implement a bytes4 to get what function you're interacting with
+    //@note release claim
+    //@note return guaranteed on the duel creation
     function _lzReceive(
         Origin calldata /* _origin*/,
         bytes32 /* _guid */,
@@ -178,6 +193,8 @@ contract DepositModule is OApp {
         emit Released(duel,opt,multiplier);
     }
 
+    //@note quoteBet
+    //@note create a quoteNewDuel
     function quote(
         uint32 _dstEid,
         Bet memory _duel,

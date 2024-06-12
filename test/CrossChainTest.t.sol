@@ -56,7 +56,7 @@ contract CrossChainTest is Test {
     function testSend() public {
         vm.startPrank(owner,owner);
         duelStakesL0.betDuelInput memory params = duelStakesL0.betDuelInput({
-             duelTitle : "Test VS Test",
+            duelTitle : "Test VS Test",
             duelDescription : "This is a description of test vs test",
             eventTitle : "Test function fighting test function",
             eventTimestamp : block.timestamp + 120 days,

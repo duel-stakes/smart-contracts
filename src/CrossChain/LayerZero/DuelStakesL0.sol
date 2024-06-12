@@ -40,7 +40,7 @@ contract duelStakesL0 is OApp,Pausable{
         string eventTitle;
         uint256 eventTimestamp;
         uint256 deadlineTimestamp;
-        address duelCreator;
+        mapping(uint256 chainId => address) duelCreator;
         uint256 totalPrizePool;
         uint256 opt1PrizePool;
         uint256 opt2PrizePool;
@@ -204,7 +204,7 @@ contract duelStakesL0 is OApp,Pausable{
         _depositPick(_amount,_option,msg.sender,_aux,block.chainid);
 
         if(_aux.unclaimedPrizePool <= _aux.totalPrizePool && _aux.unclaimedPrizePool != 0){
-            bool success = _paymentToken.transfer(_aux.duelCreator, _aux.unclaimedPrizePool);
+            bool success = _paymentToken.transfer(_aux.duelCreator[block.chainid], _aux.unclaimedPrizePool);
             if (!success)
             revert transferDidNotSucceed();
             _aux.unclaimedPrizePool = 0;
@@ -222,7 +222,7 @@ contract duelStakesL0 is OApp,Pausable{
         betDuel storage _aux = _checkDuelExistence(_title,_eventDate);
         require(_aux.eventTimestamp <= block.timestamp,"event did not happen yet");
         if(_aux.totalPrizePool < _aux.unclaimedPrizePool && _aux.totalPrizePool > 0){
-            bool success = _paymentToken.transfer(_aux.duelCreator, _aux.totalPrizePool);
+            bool success = _paymentToken.transfer(_aux.duelCreator[block.chainid], _aux.totalPrizePool);
             if (!success)
             revert transferDidNotSucceed();
             _aux.totalPrizePool = _aux.unclaimedPrizePool;
@@ -280,7 +280,7 @@ contract duelStakesL0 is OApp,Pausable{
     }
     function getCreator(string memory _title, uint256 _timestamp) public view returns(address){
         bytes32 _id = keccak256(abi.encode(_timestamp,_title));
-        return (duels[_id].duelCreator);
+        return (duels[_id].duelCreator[block.chainid]);
     }
     function getUserClaimed(string memory _title, uint256 _timestamp,address _user) public view returns(bool){
         bytes32 _id = keccak256(abi.encode(_timestamp,_title));
@@ -325,7 +325,7 @@ contract duelStakesL0 is OApp,Pausable{
     }
     function _checkDuelExistence(bytes32 _id) internal view returns(betDuel storage _aux){
         _aux = duels[_id];
-        if(_aux.duelCreator == address(0))
+        if(_aux.duelCreator[block.chainid] == address(0))
         revert duelDoesNotExist();
     }
 
@@ -334,7 +334,7 @@ contract duelStakesL0 is OApp,Pausable{
         _aux.duelTitle = _newDuel.duelTitle;
         _aux.eventTitle = _newDuel.eventTitle;
         _aux.duelDescription = _newDuel.duelDescription;
-        _aux.duelCreator = _newDuel.duelCreator;
+        _aux.duelCreator[block.chainid] = _newDuel.duelCreator;
         _aux.deadlineTimestamp = _newDuel.deadlineTimestamp;
         _aux.eventTimestamp = _newDuel.eventTimestamp;
         _aux.unclaimedPrizePool = _newDuel.initialPrizePool;
@@ -402,7 +402,7 @@ contract duelStakesL0 is OApp,Pausable{
         if (!success)
         revert transferDidNotSucceed();
         _pay = (_duel.totalPrizePool*100)/10000;
-        success = _paymentToken.transfer(_duel.duelCreator, _pay);
+        success = _paymentToken.transfer(_duel.duelCreator[block.chainid], _pay);
         if (!success)
         revert transferDidNotSucceed();
 
@@ -413,7 +413,9 @@ contract duelStakesL0 is OApp,Pausable{
     //                                             L0 FUNCTIONS
     //----------------------------------------------------------------------------------------------------
 
-
+    //@note implement a bytes4 to get what function you're interacting with
+    //@note Use local storage for bytes4 "_betOnDuel"
+    //@note implement create a new duel
     function _lzReceive(
         Origin calldata /*_origin*/,
         bytes32 /* _guid */,
@@ -429,14 +431,16 @@ contract duelStakesL0 is OApp,Pausable{
         }        
     }
 
-    //@note CHECK ALL MESSAGE SENDERS
+    //@note Implement a _lzSend with "release bet"
+    //@note Implement a _lzSend with "repay guaranteed"
+
     function _betOnDuel(bytes32 _id, pickOpts _option, uint256 _amount, uint256 _chainId, address _user) internal notBlockedBytes32(_id) whenNotPaused{
         betDuel storage _aux = _checkDuelExistence(_id);
         require(block.timestamp <= _aux.deadlineTimestamp, "Bet not possible due to time limit");
         _depositPick(_amount,_option,_user,_aux,_chainId);
 
         if(_aux.unclaimedPrizePool <= _aux.totalPrizePool && _aux.unclaimedPrizePool != 0){
-            bool success = _paymentToken.transfer(_aux.duelCreator, _aux.unclaimedPrizePool);
+            bool success = _paymentToken.transfer(_aux.duelCreator[_chainId], _aux.unclaimedPrizePool);
             if (!success)
             revert transferDidNotSucceed();
             _aux.unclaimedPrizePool = 0;
