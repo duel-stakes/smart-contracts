@@ -21,6 +21,7 @@ contract duelStakesL0 is OApp, Pausable {
     mapping(bytes32 => betDuel) public duels;
     mapping(address => bool) public duelCreators;
 
+
     //----------------------------------------------------------------------------------------------------
     //                                               ERC20 IDENTIFIER
     //----------------------------------------------------------------------------------------------------
@@ -66,8 +67,9 @@ contract duelStakesL0 is OApp, Pausable {
         string duelTitle;
         string duelDescription;
         string eventTitle;
-        uint256 eventTimestamp;
-        uint256 deadlineTimestamp;
+        uint128 eventTimestamp;
+        uint128 deadlineTimestamp;
+        uint256 chainId;
         mapping(uint256 chainId => address) duelCreator;
         uint256 totalPrizePool;
         uint256 opt1PrizePool;
@@ -433,6 +435,13 @@ contract duelStakesL0 is OApp, Pausable {
         bytes32 _id = keccak256(abi.encode(_timestamp, _title));
         return (duels[_id].duelCreator[block.chainid]);
     }
+    function getChainId(
+        string memory _title,
+        uint256 _timestamp
+    ) public view returns (uint256) {
+        bytes32 _id = keccak256(abi.encode(_timestamp, _title));
+        return (duels[_id].chainId);
+    }
 
     function getUserClaimed(
         string memory _title,
@@ -512,9 +521,10 @@ contract duelStakesL0 is OApp, Pausable {
         _aux.eventTitle = _newDuel.eventTitle;
         _aux.duelDescription = _newDuel.duelDescription;
         _aux.duelCreator[_chainId] = _newDuel.duelCreator;
-        _aux.deadlineTimestamp = _newDuel.deadlineTimestamp;
-        _aux.eventTimestamp = _newDuel.eventTimestamp;
+        _aux.deadlineTimestamp = uint128(_newDuel.deadlineTimestamp);
+        _aux.eventTimestamp = uint128(_newDuel.eventTimestamp);
         _aux.unclaimedPrizePool = _newDuel.initialPrizePool;
+        _aux.chainId = _chainId;
     }
 
     function _transferAmount(uint256 _amount) internal {

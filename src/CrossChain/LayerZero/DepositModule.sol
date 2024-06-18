@@ -285,7 +285,6 @@ contract DepositModule is OApp {
     //                                               CROSS-CHAIN MESSAGE
     //----------------------------------------------------------------------------------------------------
 
-    //@note implement a bytes4 to get what function you're interacting with
     //@note release claim
     //@note return guaranteed on the duel creation
     function _lzReceive(
