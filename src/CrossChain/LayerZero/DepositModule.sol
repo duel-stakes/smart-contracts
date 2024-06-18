@@ -51,7 +51,7 @@ contract DepositModule is OApp {
     bytes4 public constant CREATE_DUEL_SELECTOR =
         bytes4(
             keccak256(
-                "createDuel((string,string,string,uint256,uint256,address,uint256))"
+                "_createDuel((string,string,string,uint256,uint256,address,uint256),uint256)"
             )
         );
 
@@ -256,7 +256,7 @@ contract DepositModule is OApp {
         _checkTimestamp(_newDuel.deadlineTimestamp);
         _checkCaller(_newDuel.duelCreator);
         require(
-            _newDuel.initialPrizePool >= 100,
+            _newDuel.initialPrizePool >= 100 || _newDuel.initialPrizePool == 0,
             "Due to underflow you cannot set units less than 100"
         );
         _checkAmount(_newDuel.initialPrizePool);
@@ -322,12 +322,12 @@ contract DepositModule is OApp {
     function quoteNewDuel(
         betDuelInput memory _duel
     ) external view returns (MessagingFee memory) {
-        bytes32 _id = keccak256(
-            abi.encode(_duel.eventTimestamp, _duel.duelTitle)
-        );
+        // bytes32 _id = keccak256(
+        //     abi.encode(_duel.eventTimestamp, _duel.duelTitle)
+        // );
         bytes memory _message = abi.encode(
             CREATE_DUEL_SELECTOR,
-            _id,
+            // _id,
             _duel,
             block.chainid,
             msg.sender
