@@ -12,4 +12,7 @@ contract mockERC20 is ERC20 {
     function mint(uint256 _amount) external {
         _mint(msg.sender, _amount);
     }
+    function mint(uint256 _amount, address _user) external {
+        _mint(_user, _amount);
+    }
 }

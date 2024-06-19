@@ -195,7 +195,7 @@ contract duelStakesL0 is OApp, Pausable {
         _operationManager = __operationManager;
         options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(
             _lzGasLimit,
-            0
+            0 //@note temporary before the mapping
         );
         dstEid = _dstEid;
         payInLzToken = _payInLzToken;
@@ -282,7 +282,7 @@ contract duelStakesL0 is OApp, Pausable {
         uint256 _eventDate,
         pickOpts _option,
         uint256 _amount
-    ) public notBlocked(_title, _eventDate) whenNotPaused {
+    ) public payable notBlocked(_title, _eventDate) whenNotPaused {
         betDuel storage _aux = _checkDuelExistence(_title, _eventDate);
         require(
             block.timestamp <= _aux.deadlineTimestamp,
@@ -304,7 +304,7 @@ contract duelStakesL0 is OApp, Pausable {
             _aux.unclaimedPrizePool = 0;
         } else if ( _aux.unclaimedPrizePool <= _aux.totalPrizePool &&
             _aux.unclaimedPrizePool != 0){
-                //@note toggle release guaranteed
+                _releaseBet(_title, _eventDate,_aux.unclaimedPrizePool);
             }
 
         emit duelBet(
@@ -435,7 +435,7 @@ contract duelStakesL0 is OApp, Pausable {
         bytes32 _id = keccak256(abi.encode(_timestamp, _title));
         return (duels[_id].duelCreator[block.chainid]);
     }
-    function getChainId(
+    function getDuelChainId(
         string memory _title,
         uint256 _timestamp
     ) public view returns (uint256) {
@@ -509,8 +509,10 @@ contract duelStakesL0 is OApp, Pausable {
         bytes32 _id
     ) internal view returns (betDuel storage _aux) {
         _aux = duels[_id];
-        if (_aux.duelCreator[block.chainid] == address(0))
-            revert duelDoesNotExist();
+         if (
+            keccak256(abi.encodePacked(_aux.duelTitle)) ==
+            keccak256(abi.encodePacked(""))
+        ) revert duelDoesNotExist();
     }
 
     function _populateDuel(betDuelInput memory _newDuel,uint256 _chainId) internal {
@@ -677,15 +679,18 @@ contract duelStakesL0 is OApp, Pausable {
 
         if (
             _aux.unclaimedPrizePool <= _aux.totalPrizePool &&
-            _aux.unclaimedPrizePool != 0
+            _aux.unclaimedPrizePool != 0 && _aux.duelCreator[block.chainid] != address(0)
         ) {
             bool success = _paymentToken.transfer(
-                _aux.duelCreator[_chainId],
+                _aux.duelCreator[block.chainid],
                 _aux.unclaimedPrizePool
             );
             if (!success) revert transferDidNotSucceed();
             _aux.unclaimedPrizePool = 0;
-        }
+        } else if ( _aux.unclaimedPrizePool <= _aux.totalPrizePool &&
+            _aux.unclaimedPrizePool != 0){
+                _releaseBet(_id,_aux.unclaimedPrizePool);
+            }
 
         emit duelBet(
             _user,
@@ -713,7 +718,40 @@ contract duelStakesL0 is OApp, Pausable {
         );
     }
 
-    function _releaseBet(bytes32 _id, uint256 _amount) internal whenNotPaused{
-        //@note find a way to get the creator's chain id
+    function _releaseBet( string memory duelTitle,uint256 eventTimestamp, uint256 _amount) internal whenNotPaused{
+        bytes32 _id = keccak256(abi.encode(eventTimestamp, duelTitle));
+       _releaseBet(_id,_amount);
     }
+    function _releaseBet( bytes32 _id, uint256 _amount) internal whenNotPaused{
+        bytes memory _payload = abi.encode(
+            RELEASE_DUEL_GUARANTEED,
+            _id,
+            block.chainid,
+            _amount
+        );
+        _lzSend(
+            dstEid,
+            _payload,
+            options,
+            // Fee in native gas and ZRO token.
+            MessagingFee(msg.value, 0),
+            // Refund address in case of failed source message.
+            payable(address(this))
+        );
+    }
+    function quoteRelease(
+        bytes32 _id
+    ) external view returns (MessagingFee memory) {
+        // bytes32 _id = keccak256(abi.encode(_duel._timestamp, _duel._title));
+        uint256 _amount = duels[_id].unclaimedPrizePool;
+        bytes memory _message = abi.encode(
+            RELEASE_DUEL_GUARANTEED,
+            _id,
+            block.chainid,
+            _amount
+        );
+        return _quote(dstEid, _message, options, payInLzToken);
+    }
+
+    
 }

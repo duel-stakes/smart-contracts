@@ -18,6 +18,11 @@ contract DepositModule is OApp {
         uint8 indexed opt,
         uint256 indexed multiplier
     );
+    event GuaranteedTaken(
+        bytes32 indexed duel,
+        uint256 indexed amount,
+        address indexed creator
+    );
 
     //----------------------------------------------------------------------------------------------------
     //                                               DUELS
@@ -32,6 +37,7 @@ contract DepositModule is OApp {
 
     uint32 dstEid;
     bytes options;
+    bytes options2;
     bool payInLzToken;
 
     //----------------------------------------------------------------------------------------------------
@@ -52,6 +58,12 @@ contract DepositModule is OApp {
         bytes4(
             keccak256(
                 "_createDuel((string,string,string,uint256,uint256,address,uint256),uint256)"
+            )
+        );
+    bytes4 public constant RELEASE_DUEL_GUARANTEED =
+        bytes4(
+            keccak256(
+                "_releaseGuarateed(bytes32,uint256)"
             )
         );
 
@@ -78,7 +90,6 @@ contract DepositModule is OApp {
         address duelCreator;
         uint256 initialPrizePool;
     }
-
     struct betDuel {
         pickOpts releaseReward;
         bool blockedDuel;
@@ -86,6 +97,7 @@ contract DepositModule is OApp {
         string duelDescription;
         uint256 eventTimestamp;
         address duelCreator;
+        uint256 guaranteed;
         uint256 multiplier;
         mapping(address => bool) userClaimed; //math to do is total pooled on (pooledAmount/winner)*totalprizepool = (pooledAmount*totalprizepool/winner)
         mapping(address => deposit) userDeposits;
@@ -116,6 +128,7 @@ contract DepositModule is OApp {
     //                                               ERRORS
     //----------------------------------------------------------------------------------------------------
 
+    error wrongAmountOrAlreadyTaken();
     error amountEmpty();
     error notEnoughBalance();
     error notEnoughAllowance();
@@ -123,6 +136,7 @@ contract DepositModule is OApp {
     error pickNotAvailable();
     error emptyString();
     error eventAlreadyHappened();
+    error eventDoesNotExists();
     error callerNotTheCreator();
 
     //----------------------------------------------------------------------------------------------------
@@ -145,6 +159,10 @@ contract DepositModule is OApp {
         options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(
             _lzGasLimit,
             0
+        );
+        options2 = OptionsBuilder.newOptions().addExecutorLzReceiveOption(
+            _lzGasLimit,
+            2103608000000000
         );
         dstEid = _dstEid;
         payInLzToken = _payInLzToken;
@@ -211,6 +229,21 @@ contract DepositModule is OApp {
         _aux.duelTitle = _newDuel.duelTitle;
         _aux.duelDescription = _newDuel.duelDescription;
         _aux.eventTimestamp = _newDuel.eventTimestamp;
+        _aux.guaranteed = _newDuel.initialPrizePool;
+        _aux.duelCreator = msg.sender;
+    }
+
+    function _releaseGuarateed(bytes32 _id,uint256 _amount) internal{
+        if(duels[_id].duelCreator == address(0))
+        revert eventDoesNotExists();
+
+        if(duels[_id].guaranteed != _amount)
+        revert wrongAmountOrAlreadyTaken();
+
+        bool success = _paymentToken.transfer(duels[_id].duelCreator, _amount);
+        if (!success) revert transferDidNotSucceed();
+
+        duels[_id].guaranteed = 0;
     }
 
     //----------------------------------------------------------------------------------------------------
@@ -218,8 +251,7 @@ contract DepositModule is OApp {
     //----------------------------------------------------------------------------------------------------
 
     //@note implement release duel (internal function)
-    //@note implement repay guaranteed (internal function)
-    function betOnDuel(Bet memory _duel) external payable {
+    function betOnDuelClean(Bet memory _duel) external payable {
         _checkAmount(_duel._amount);
         _transferAmount(_duel._amount);
 
@@ -231,7 +263,7 @@ contract DepositModule is OApp {
             _id,
             _duel._opt,
             _duel._amount,
-            block.chainid,
+            block.chainid+1,
             msg.sender
         );
 
@@ -245,10 +277,35 @@ contract DepositModule is OApp {
             payable(msg.sender)
         );
     }
+    function betOnDuelFull(Bet memory _duel) external payable {
+        _checkAmount(_duel._amount);
+        _transferAmount(_duel._amount);
+
+        bytes32 _id = keccak256(abi.encode(_duel._timestamp, _duel._title));
+        _depositPick(_duel._amount, _duel._opt, msg.sender, duels[_id]);
+
+        bytes memory _payload = abi.encode(
+            BET_ON_DUEL_SELECTOR,
+            _id,
+            _duel._opt,
+            _duel._amount,
+            block.chainid+1,
+            msg.sender
+        );
+
+        _lzSend(
+            dstEid,
+            _payload,
+            options2,
+            // Fee in native gas and ZRO token.
+            MessagingFee(msg.value, 0),
+            // Refund address in case of failed source message.
+            payable(msg.sender)
+        );
+    }
 
     //@note correct implementation for internal function
     function createDuel(betDuelInput memory _newDuel) public payable {
-        _newDuel.duelCreator = msg.sender;
         _checkEmpty(_newDuel.duelTitle);
         _checkEmpty(_newDuel.duelDescription);
         _checkEmpty(_newDuel.eventTitle);
@@ -266,7 +323,7 @@ contract DepositModule is OApp {
         bytes memory _payload = abi.encode(
             CREATE_DUEL_SELECTOR,
             _newDuel,
-            block.chainid,
+            block.chainid+1,
             msg.sender
         );
 
@@ -294,13 +351,24 @@ contract DepositModule is OApp {
         address, // Executor address as specified by the OApp.
         bytes calldata // Any extra data or options to trigger on receipt.
     ) internal override {
-        (bytes32 duel, uint8 opt, uint256 multiplier) = abi.decode(
-            payload,
-            (bytes32, uint8, uint256)
-        );
-        duels[duel].releaseReward = pickOpts(opt);
-        duels[duel].multiplier = multiplier;
-        emit Released(duel, opt, multiplier);
+        if (
+            bytes4(payload[:4]) == RELEASE_DUEL_GUARANTEED
+        ){
+            (,bytes32 duel, /*uint256 chainId*/, uint256 amount) = abi.decode(
+                payload,
+                (bytes4, bytes32, uint256,uint256)
+            );
+            _releaseGuarateed(duel,amount);
+            emit GuaranteedTaken(duel,amount,duels[duel].duelCreator);
+        }else{
+            (bytes32 duel, uint8 opt, uint256 multiplier) = abi.decode(
+                payload,
+                (bytes32, uint8, uint256)
+            );
+            duels[duel].releaseReward = pickOpts(opt);
+            duels[duel].multiplier = multiplier;
+            emit Released(duel, opt, multiplier);
+        }
     }
 
     function quoteBet(
@@ -317,6 +385,20 @@ contract DepositModule is OApp {
         );
         return _quote(dstEid, _message, options, payInLzToken);
     }
+    function quoteBetOptions2(
+        Bet memory _duel
+    ) external view returns (MessagingFee memory) {
+        bytes32 _id = keccak256(abi.encode(_duel._timestamp, _duel._title));
+        bytes memory _message = abi.encode(
+            BET_ON_DUEL_SELECTOR,
+            _id,
+            _duel._opt,
+            _duel._amount,
+            block.chainid,
+            msg.sender
+        );
+        return _quote(dstEid, _message, options2, payInLzToken);
+    }
 
     function quoteNewDuel(
         betDuelInput memory _duel
@@ -326,9 +408,8 @@ contract DepositModule is OApp {
         // );
         bytes memory _message = abi.encode(
             CREATE_DUEL_SELECTOR,
-            // _id,
             _duel,
-            block.chainid,
+            block.chainid+1,
             msg.sender
         );
         return _quote(dstEid, _message, options, payInLzToken);
