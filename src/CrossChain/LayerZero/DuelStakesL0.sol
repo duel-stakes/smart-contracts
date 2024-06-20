@@ -2,14 +2,15 @@
 pragma solidity ^0.8.2;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+
 import {OApp, Origin, MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/OApp.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 
+import {coreModule} from "./coreModule.sol";
+
 ///@author Waiandt.eth
 
-contract duelStakesL0 is OApp, Pausable {
+contract duelStakesL0 is coreModule, OApp {
     using OptionsBuilder for bytes;
     //----------------------------------------------------------------------------------------------------
     //                                               STORAGE
@@ -19,43 +20,12 @@ contract duelStakesL0 is OApp, Pausable {
     //----------------------------------------------------------------------------------------------------
 
     mapping(bytes32 => betDuel) public duels;
-    mapping(address => bool) public duelCreators;
-
-
-    //----------------------------------------------------------------------------------------------------
-    //                                               ERC20 IDENTIFIER
-    //----------------------------------------------------------------------------------------------------
-
-    IERC20 public _paymentToken;
-    address public _treasuryAccount;
-    address public _operationManager;
 
     //----------------------------------------------------------------------------------------------------
     //                                        CROSSCHAIN VARIABLES
     //----------------------------------------------------------------------------------------------------
-
-    uint32 dstEid;
-    bytes options; //@note transform this into a mapping for the bytes4
-    bool payInLzToken;
-
-    bytes4 public constant BET_ON_DUEL_SELECTOR =
-        bytes4(
-            keccak256(
-                "_betOnDuel(string,uint256,uint8,uint256,uint256,address)"
-            )
-        );
-    bytes4 public constant CREATE_DUEL_SELECTOR =
-        bytes4(
-            keccak256(
-                "_createDuel((string,string,string,uint256,uint256,address,uint256),uint256)"
-            )
-        );
-    bytes4 public constant RELEASE_DUEL_GUARANTEED =
-        bytes4(
-            keccak256(
-                "_releaseGuarateed(bytes32,uint256)"
-            )
-        );
+    mapping(uint256 chainId => uint32 eId) public eIds;
+    mapping(bytes4 selector => bytes option) public options;
 
     //----------------------------------------------------------------------------------------------------
     //                                               STRUCTS
@@ -77,54 +47,19 @@ contract duelStakesL0 is OApp, Pausable {
         uint256 opt3PrizePool;
         uint256 unclaimedPrizePool;
         mapping(address => bool) userClaimed; //math to do is total pooled on (pooledAmount/winner)*totalprizepool = (pooledAmount*totalprizepool/winner)
-        mapping(address => mapping(uint256 chainId => deposit)) userDeposits; //@note changed here
-    }
-    struct betDuelInput {
-        string duelTitle;
-        string duelDescription;
-        string eventTitle;
-        uint256 eventTimestamp;
-        uint256 deadlineTimestamp;
-        address duelCreator;
-        uint256 initialPrizePool;
-    }
-
-    struct deposit {
-        uint256 _amountOp1;
-        uint256 _amountOp2;
-        uint256 _amountOp3;
-    }
-
-    enum pickOpts {
-        none,
-        opt1,
-        opt2,
-        opt3
+        mapping(address => mapping(uint256 chainId => deposit)) userDeposits;
     }
 
     //----------------------------------------------------------------------------------------------------
     //                                               ERRORS
     //----------------------------------------------------------------------------------------------------
-
-    error notAllowedCreator();
     error nonExistingDuel();
-    error transferDidNotSucceed();
-    error emptyString();
-    error eventAlreadyHappened();
-    error callerNotTheCreator();
-    error amountEmpty();
-    error notEnoughBalance();
-    error notEnoughAllowance();
-    error duelDoesNotExist();
-    error duelIsBlocked();
-    error pickNotAvailable();
     error claimNotAvailable();
 
     //----------------------------------------------------------------------------------------------------
     //                                               EVENTS
     //----------------------------------------------------------------------------------------------------
 
-    event duelCreatorChanged(address indexed _address, bool indexed _allowed);
     event emergencyBlock(string _title, uint256 indexed _eventDate);
     event duelCreated(
         string _title,
@@ -143,23 +78,14 @@ contract duelStakesL0 is OApp, Pausable {
     event betClosed(
         string _title,
         uint256 indexed _eventDate,
-        pickOpts indexed _winner
-    );
-    event claimedBet(
-        string _title,
-        uint256 indexed _eventDate,
-        address indexed _user,
-        uint256 indexed _payment
+        pickOpts indexed _winner,
+        uint256 _chain
     );
 
     //----------------------------------------------------------------------------------------------------
     //                                               MODIFIERS
     //----------------------------------------------------------------------------------------------------
 
-    modifier onlyCreator() {
-        if (!duelCreators[msg.sender]) revert notAllowedCreator();
-        _;
-    }
     modifier notBlocked(string calldata _title, uint256 _eventDate) {
         if (duels[keccak256(abi.encode(_eventDate, _title))].blockedDuel)
             revert duelIsBlocked();
@@ -185,40 +111,13 @@ contract duelStakesL0 is OApp, Pausable {
         address __operationManager,
         address _endpoint,
         address _owner,
-        uint32 _dstEid,
-        uint128 _lzGasLimit,
         bool _payInLzToken
-    ) OApp(_endpoint, _owner) Ownable(_owner) Pausable() {
+    ) OApp(_endpoint, _owner) coreModule(_owner) {
         _paymentToken = IERC20(__paymentToken);
         duelCreators[msg.sender] = true;
         _treasuryAccount = __treasuryAccount;
         _operationManager = __operationManager;
-        options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(
-            _lzGasLimit,
-            0 //@note temporary before the mapping
-        );
-        dstEid = _dstEid;
         payInLzToken = _payInLzToken;
-    }
-
-    //----------------------------------------------------------------------------------------------------
-    //                                           DUELS ADJUSTMENT MANAGER
-    //----------------------------------------------------------------------------------------------------
-
-    function changeDuelCreator(
-        address _address,
-        bool _allowed
-    ) public onlyOwner {
-        duelCreators[_address] = _allowed;
-        emit duelCreatorChanged(_address, _allowed);
-    }
-
-    function pause() public onlyOwner {
-        _pause();
-    }
-
-    function unpause() public onlyOwner {
-        _pause();
     }
 
     //----------------------------------------------------------------------------------------------------
@@ -249,7 +148,7 @@ contract duelStakesL0 is OApp, Pausable {
     //----------------------------------------------------------------------------------------------------
 
     function createDuel(
-        betDuelInput calldata _newDuel
+        coreModule.CreateDuelInput calldata _newDuel
     ) public onlyCreator whenNotPaused {
         _checkEmpty(_newDuel.duelTitle);
         _checkEmpty(_newDuel.duelDescription);
@@ -258,13 +157,13 @@ contract duelStakesL0 is OApp, Pausable {
         _checkTimestamp(_newDuel.deadlineTimestamp);
         _checkCaller(_newDuel.duelCreator);
         require(
-            _newDuel.initialPrizePool >= 100,
+            _newDuel.initialPrizePool >= 100 || _newDuel.initialPrizePool == 0,
             "Due to underflow you cannot set units less than 100"
         );
         _checkAmount(_newDuel.initialPrizePool);
         _transferAmount(_newDuel.initialPrizePool);
 
-        _populateDuel(_newDuel,block.chainid);
+        _populateDuel(_newDuel, block.chainid);
         emit duelCreated(
             _newDuel.duelTitle,
             _newDuel.eventTimestamp,
@@ -294,7 +193,8 @@ contract duelStakesL0 is OApp, Pausable {
 
         if (
             _aux.unclaimedPrizePool <= _aux.totalPrizePool &&
-            _aux.unclaimedPrizePool != 0 && _aux.duelCreator[block.chainid] != address(0)
+            _aux.unclaimedPrizePool != 0 &&
+            _aux.duelCreator[block.chainid] != address(0)
         ) {
             bool success = _paymentToken.transfer(
                 _aux.duelCreator[block.chainid],
@@ -302,10 +202,17 @@ contract duelStakesL0 is OApp, Pausable {
             );
             if (!success) revert transferDidNotSucceed();
             _aux.unclaimedPrizePool = 0;
-        } else if ( _aux.unclaimedPrizePool <= _aux.totalPrizePool &&
-            _aux.unclaimedPrizePool != 0){
-                _releaseBet(_title, _eventDate,_aux.unclaimedPrizePool);
-            }
+        } else if (
+            _aux.unclaimedPrizePool <= _aux.totalPrizePool &&
+            _aux.unclaimedPrizePool != 0
+        ) {
+            _releaseGuaranteed(
+                _title,
+                _eventDate,
+                _aux.unclaimedPrizePool,
+                _aux.chainId
+            );
+        }
 
         emit duelBet(
             msg.sender,
@@ -325,7 +232,7 @@ contract duelStakesL0 is OApp, Pausable {
         string calldata _title,
         uint256 _eventDate,
         pickOpts _winner
-    ) public onlyOwner {
+    ) public payable onlyOwner {
         betDuel storage _aux = _checkDuelExistence(_title, _eventDate);
         require(
             _aux.eventTimestamp <= block.timestamp,
@@ -333,7 +240,8 @@ contract duelStakesL0 is OApp, Pausable {
         );
         if (
             _aux.totalPrizePool < _aux.unclaimedPrizePool &&
-            _aux.totalPrizePool > 0
+            _aux.totalPrizePool > 0 &&
+            _aux.chainId == block.chainid
         ) {
             bool success = _paymentToken.transfer(
                 _aux.duelCreator[block.chainid],
@@ -341,11 +249,23 @@ contract duelStakesL0 is OApp, Pausable {
             );
             if (!success) revert transferDidNotSucceed();
             _aux.totalPrizePool = _aux.unclaimedPrizePool;
+            _5percent(_aux);
+        } else if (
+            _aux.totalPrizePool < _aux.unclaimedPrizePool &&
+            _aux.totalPrizePool > 0
+        ) {
+            _releaseGuaranteed(
+                _title,
+                _eventDate,
+                _aux.totalPrizePool,
+                _aux.chainId
+            );
+            _aux.totalPrizePool = _aux.unclaimedPrizePool;
+            //@note implement 5percent somehow
         }
-        _5percent(_aux);
         _aux.releaseReward = _winner;
         _aux.unclaimedPrizePool = _aux.totalPrizePool;
-        emit betClosed(_title, _eventDate, _winner);
+        emit betClosed(_title, _eventDate, _winner, block.chainid);
     }
 
     function claimBet(
@@ -356,23 +276,32 @@ contract duelStakesL0 is OApp, Pausable {
         require(!_aux.userClaimed[msg.sender], "User already claimed");
         uint256 _payment = _updateClaim(_aux, msg.sender);
 
-        emit claimedBet(_title, _eventDate, msg.sender, _payment);
+        emit claimedBet(
+            _title,
+            _eventDate,
+            msg.sender,
+            _payment,
+            block.chainid
+        );
     }
 
     //----------------------------------------------------------------------------------------------------
     //                                         MANAGEMENT SETTER FUNCTIONS
     //----------------------------------------------------------------------------------------------------
 
-    function changeTreasury(address _treasury) public onlyOwner {
-        _treasuryAccount = _treasury;
+    function changeEId(uint256 _chain, uint32 _eId) public onlyOwner {
+        eIds[_chain] = _eId;
+        emit changedEId(_chain, _eId);
     }
 
-    function changeOperations(address _operation) public onlyOwner {
-        _operationManager = _operation;
-    }
-
-    function changePayment(address _payment) public onlyOwner {
-        _paymentToken = IERC20(_payment);
+    function changeOptions(
+        bytes4 _selector,
+        uint128 _lzGasLimit,
+        uint128 _value
+    ) public onlyOwner {
+        options[_selector] = OptionsBuilder
+            .newOptions()
+            .addExecutorLzReceiveOption(_lzGasLimit, _value);
     }
 
     //----------------------------------------------------------------------------------------------------
@@ -435,6 +364,7 @@ contract duelStakesL0 is OApp, Pausable {
         bytes32 _id = keccak256(abi.encode(_timestamp, _title));
         return (duels[_id].duelCreator[block.chainid]);
     }
+
     function getDuelChainId(
         string memory _title,
         uint256 _timestamp
@@ -470,30 +400,6 @@ contract duelStakesL0 is OApp, Pausable {
     //                                             INTERNAL AUXILIAR
     //----------------------------------------------------------------------------------------------------
 
-    function _checkEmpty(string memory _str) internal pure {
-        if (
-            keccak256(abi.encodePacked(_str)) == keccak256(abi.encodePacked(""))
-        ) revert emptyString();
-    }
-
-    function _checkTimestamp(uint256 _timestamp) internal view {
-        if (_timestamp < block.timestamp) revert eventAlreadyHappened();
-    }
-
-    function _checkCaller(address _creator) internal view {
-        if (_creator != msg.sender) revert callerNotTheCreator();
-    }
-
-    function _checkAmount(uint256 _amount) internal view {
-        if (_amount == 0) revert amountEmpty();
-
-        if (_paymentToken.balanceOf(msg.sender) < _amount)
-            revert notEnoughBalance();
-
-        if (_paymentToken.allowance(msg.sender, address(this)) < _amount)
-            revert notEnoughAllowance();
-    }
-
     function _checkDuelExistence(
         string memory _title,
         uint256 _timestamp
@@ -509,13 +415,16 @@ contract duelStakesL0 is OApp, Pausable {
         bytes32 _id
     ) internal view returns (betDuel storage _aux) {
         _aux = duels[_id];
-         if (
+        if (
             keccak256(abi.encodePacked(_aux.duelTitle)) ==
             keccak256(abi.encodePacked(""))
         ) revert duelDoesNotExist();
     }
 
-    function _populateDuel(betDuelInput memory _newDuel,uint256 _chainId) internal {
+    function _populateDuel(
+        coreModule.CreateDuelInput memory _newDuel,
+        uint256 _chainId
+    ) internal {
         betDuel storage _aux = duels[
             keccak256(abi.encode(_newDuel.eventTimestamp, _newDuel.duelTitle))
         ];
@@ -527,15 +436,6 @@ contract duelStakesL0 is OApp, Pausable {
         _aux.eventTimestamp = uint128(_newDuel.eventTimestamp);
         _aux.unclaimedPrizePool = _newDuel.initialPrizePool;
         _aux.chainId = _chainId;
-    }
-
-    function _transferAmount(uint256 _amount) internal {
-        bool success = _paymentToken.transferFrom(
-            msg.sender,
-            address(this),
-            _amount
-        );
-        if (!success) revert transferDidNotSucceed();
     }
 
     function _transferUserAmount(uint256 _amount) internal {
@@ -607,15 +507,20 @@ contract duelStakesL0 is OApp, Pausable {
         uint256 _pay = (_duel.totalPrizePool * 300) / 10000;
         bool success = _paymentToken.transfer(_treasuryAccount, _pay);
         if (!success) revert transferDidNotSucceed();
+        emit feeTaken(_treasuryAccount, _pay, block.chainid);
+
         _pay = (_duel.totalPrizePool * 100) / 10000;
         success = _paymentToken.transfer(_operationManager, _pay);
         if (!success) revert transferDidNotSucceed();
+        emit feeTaken(_operationManager, _pay, block.chainid);
+
         _pay = (_duel.totalPrizePool * 100) / 10000;
         success = _paymentToken.transfer(
             _duel.duelCreator[block.chainid],
             _pay
         );
         if (!success) revert transferDidNotSucceed();
+        emit feeTaken(_duel.duelCreator[block.chainid], _pay, block.chainid);
 
         _duel.totalPrizePool -= (_pay * 5);
     }
@@ -630,11 +535,7 @@ contract duelStakesL0 is OApp, Pausable {
         address, // Executor address as specified by the OApp.
         bytes calldata // Any extra data or options to trigger on receipt.
     ) internal override {
-        // Decode the payload to get the message
-        // In this case, type is string, but depends on your encoding!
-        if (
-            bytes4(payload[:4]) == BET_ON_DUEL_SELECTOR
-        ) {
+        if (bytes4(payload[:4]) == BET_ON_DUEL_SELECTOR) {
             (
                 ,
                 bytes32 _id,
@@ -650,18 +551,16 @@ contract duelStakesL0 is OApp, Pausable {
         } else if (bytes4(payload[:4]) == CREATE_DUEL_SELECTOR) {
             (
                 ,
-                betDuelInput memory _newDuel,
+                coreModule.CreateDuelInput memory _newDuel,
                 uint256 chainId,
+
             ) = abi.decode(
                     payload,
-                    (bytes4, betDuelInput, uint256, address)
+                    (bytes4, coreModule.CreateDuelInput, uint256, address)
                 );
-            _createDuel(_newDuel,chainId);
+            _createDuel(_newDuel, chainId);
         }
     }
-
-    //@note Implement a _lzSend with "release bet"
-    //@note Implement a _lzSend with "repay guaranteed"
 
     function _betOnDuel(
         bytes32 _id,
@@ -679,7 +578,8 @@ contract duelStakesL0 is OApp, Pausable {
 
         if (
             _aux.unclaimedPrizePool <= _aux.totalPrizePool &&
-            _aux.unclaimedPrizePool != 0 && _aux.duelCreator[block.chainid] != address(0)
+            _aux.unclaimedPrizePool != 0 &&
+            _aux.duelCreator[block.chainid] != address(0)
         ) {
             bool success = _paymentToken.transfer(
                 _aux.duelCreator[block.chainid],
@@ -687,10 +587,12 @@ contract duelStakesL0 is OApp, Pausable {
             );
             if (!success) revert transferDidNotSucceed();
             _aux.unclaimedPrizePool = 0;
-        } else if ( _aux.unclaimedPrizePool <= _aux.totalPrizePool &&
-            _aux.unclaimedPrizePool != 0){
-                _releaseBet(_id,_aux.unclaimedPrizePool);
-            }
+        } else if (
+            _aux.unclaimedPrizePool <= _aux.totalPrizePool &&
+            _aux.unclaimedPrizePool != 0
+        ) {
+            _releaseGuaranteed(_id, _aux.unclaimedPrizePool, _aux.chainId);
+        }
 
         emit duelBet(
             _user,
@@ -704,12 +606,13 @@ contract duelStakesL0 is OApp, Pausable {
 
     // @note check if timestamps in all chains are equeal
     function _createDuel(
-        betDuelInput memory _newDuel,uint256 _chainId
+        coreModule.CreateDuelInput memory _newDuel,
+        uint256 _chainId
     ) internal whenNotPaused {
         _checkTimestamp(_newDuel.eventTimestamp);
         _checkTimestamp(_newDuel.deadlineTimestamp);
 
-        _populateDuel(_newDuel,_chainId);
+        _populateDuel(_newDuel, _chainId);
         emit duelCreated(
             _newDuel.duelTitle,
             _newDuel.eventTimestamp,
@@ -718,11 +621,22 @@ contract duelStakesL0 is OApp, Pausable {
         );
     }
 
-    function _releaseBet( string memory duelTitle,uint256 eventTimestamp, uint256 _amount) internal whenNotPaused{
+    function _releaseGuaranteed(
+        string memory duelTitle,
+        uint256 eventTimestamp,
+        uint256 _amount,
+        uint256 _chain
+    ) internal whenNotPaused {
         bytes32 _id = keccak256(abi.encode(eventTimestamp, duelTitle));
-       _releaseBet(_id,_amount);
+        _releaseGuaranteed(_id, _amount, _chain);
     }
-    function _releaseBet( bytes32 _id, uint256 _amount) internal whenNotPaused{
+
+    function _releaseGuaranteed(
+        bytes32 _id,
+        uint256 _amount,
+        uint256 _chain
+    ) internal whenNotPaused {
+        require(eIds[_chain] != 0, "Cannot release: invalid chain id");
         bytes memory _payload = abi.encode(
             RELEASE_DUEL_GUARANTEED,
             _id,
@@ -730,19 +644,21 @@ contract duelStakesL0 is OApp, Pausable {
             _amount
         );
         _lzSend(
-            dstEid,
+            eIds[_chain],
             _payload,
-            options,
+            options[RELEASE_DUEL_GUARANTEED],
             // Fee in native gas and ZRO token.
             MessagingFee(msg.value, 0),
             // Refund address in case of failed source message.
             payable(address(this))
         );
     }
+
     function quoteRelease(
-        bytes32 _id
+        bytes32 _id,
+        uint256 _chain
     ) external view returns (MessagingFee memory) {
-        // bytes32 _id = keccak256(abi.encode(_duel._timestamp, _duel._title));
+        require(eIds[_chain] != 0, "Cannot release: invalid chain id");
         uint256 _amount = duels[_id].unclaimedPrizePool;
         bytes memory _message = abi.encode(
             RELEASE_DUEL_GUARANTEED,
@@ -750,8 +666,12 @@ contract duelStakesL0 is OApp, Pausable {
             block.chainid,
             _amount
         );
-        return _quote(dstEid, _message, options, payInLzToken);
+        return
+            _quote(
+                eIds[_chain],
+                _message,
+                options[RELEASE_DUEL_GUARANTEED],
+                payInLzToken
+            );
     }
-
-    
 }

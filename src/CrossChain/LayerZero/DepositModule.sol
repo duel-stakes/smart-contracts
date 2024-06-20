@@ -6,7 +6,9 @@ import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract DepositModule is OApp {
+import {coreModule} from "./coreModule.sol";
+
+contract DepositModule is coreModule, OApp {
     using OptionsBuilder for bytes;
 
     //----------------------------------------------------------------------------------------------------
@@ -16,12 +18,14 @@ contract DepositModule is OApp {
     event Released(
         bytes32 indexed duel,
         uint8 indexed opt,
-        uint256 indexed multiplier
+        uint256 indexed multiplier,
+        uint256 chain
     );
     event GuaranteedTaken(
         bytes32 indexed duel,
         uint256 indexed amount,
-        address indexed creator
+        address indexed creator,
+        uint256 chain
     );
 
     //----------------------------------------------------------------------------------------------------
@@ -29,7 +33,6 @@ contract DepositModule is OApp {
     //----------------------------------------------------------------------------------------------------
 
     mapping(bytes32 => betDuel) public duels;
-    mapping(address => bool) public duelCreators;
 
     //----------------------------------------------------------------------------------------------------
     //                                        CROSSCHAIN VARIABLES
@@ -38,58 +41,10 @@ contract DepositModule is OApp {
     uint32 dstEid;
     bytes options;
     bytes options2;
-    bool payInLzToken;
-
-    //----------------------------------------------------------------------------------------------------
-    //                                               ERC20 IDENTIFIER
-    //----------------------------------------------------------------------------------------------------
-
-    IERC20 public _paymentToken;
-    address public _treasuryAccount;
-    address public _operationManager;
-
-    bytes4 public constant BET_ON_DUEL_SELECTOR =
-        bytes4(
-            keccak256(
-                "_betOnDuel(string,uint256,uint8,uint256,uint256,address)"
-            )
-        );
-    bytes4 public constant CREATE_DUEL_SELECTOR =
-        bytes4(
-            keccak256(
-                "_createDuel((string,string,string,uint256,uint256,address,uint256),uint256)"
-            )
-        );
-    bytes4 public constant RELEASE_DUEL_GUARANTEED =
-        bytes4(
-            keccak256(
-                "_releaseGuarateed(bytes32,uint256)"
-            )
-        );
 
     //----------------------------------------------------------------------------------------------------
     //                                               STRUCTS
     //----------------------------------------------------------------------------------------------------
-
-    struct CreateDuelInput {
-        string duelTitle;
-        string duelDescription;
-        string eventTitle;
-        uint256 eventTimestamp;
-        uint256 deadlineTimestamp;
-        address duelCreator;
-        uint256 initialPrizePool;
-    }
-
-    struct betDuelInput {
-        string duelTitle;
-        string duelDescription;
-        string eventTitle;
-        uint256 eventTimestamp;
-        uint256 deadlineTimestamp;
-        address duelCreator;
-        uint256 initialPrizePool;
-    }
     struct betDuel {
         pickOpts releaseReward;
         bool blockedDuel;
@@ -101,19 +56,6 @@ contract DepositModule is OApp {
         uint256 multiplier;
         mapping(address => bool) userClaimed; //math to do is total pooled on (pooledAmount/winner)*totalprizepool = (pooledAmount*totalprizepool/winner)
         mapping(address => deposit) userDeposits;
-    }
-
-    struct deposit {
-        uint256 _amountOp1;
-        uint256 _amountOp2;
-        uint256 _amountOp3;
-    }
-
-    enum pickOpts {
-        none,
-        opt1,
-        opt2,
-        opt3
     }
 
     //change this to populate betDuel, choose duel based on the duel title and event timestamp of bytes32 key
@@ -129,15 +71,28 @@ contract DepositModule is OApp {
     //----------------------------------------------------------------------------------------------------
 
     error wrongAmountOrAlreadyTaken();
-    error amountEmpty();
-    error notEnoughBalance();
-    error notEnoughAllowance();
-    error transferDidNotSucceed();
-    error pickNotAvailable();
-    error emptyString();
-    error eventAlreadyHappened();
     error eventDoesNotExists();
-    error callerNotTheCreator();
+    error duelAlreadyReleased();
+    error duelNotReleased();
+
+    //----------------------------------------------------------------------------------------------------
+    //                                               MODIFIERS
+    //----------------------------------------------------------------------------------------------------
+
+    modifier notBlocked(string calldata _title, uint256 _eventDate) {
+        if (duels[keccak256(abi.encode(_eventDate, _title))].blockedDuel)
+            revert duelIsBlocked();
+        _;
+    }
+    modifier notBlockedMemory(string memory _title, uint256 _eventDate) {
+        if (duels[keccak256(abi.encode(_eventDate, _title))].blockedDuel)
+            revert duelIsBlocked();
+        _;
+    }
+    modifier notBlockedBytes32(bytes32 _id) {
+        if (duels[_id].blockedDuel) revert duelIsBlocked();
+        _;
+    }
 
     //----------------------------------------------------------------------------------------------------
     //                                               CONSTRUCTOR
@@ -152,7 +107,7 @@ contract DepositModule is OApp {
         uint32 _dstEid,
         uint128 _lzGasLimit,
         bool _payInLzToken
-    ) OApp(_endpoint, _owner) Ownable(_owner) {
+    ) OApp(_endpoint, _owner) coreModule(_owner) {
         _paymentToken = IERC20(__paymentToken);
         _treasuryAccount = __treasuryAccount;
         _operationManager = __operationManager;
@@ -169,41 +124,17 @@ contract DepositModule is OApp {
     }
 
     //----------------------------------------------------------------------------------------------------
+    //                                               MANAGEMENT
+    //----------------------------------------------------------------------------------------------------
+    //@note create withdrawLiquidity for the liquidityRouter
+    function changeEId(uint32 _eId) public onlyOwner {
+        dstEid = _eId;
+        emit changedEId(block.chainid, _eId);
+    }
+
+    //----------------------------------------------------------------------------------------------------
     //                                               INTERNAL
     //----------------------------------------------------------------------------------------------------
-
-    function _checkEmpty(string memory _str) internal pure {
-        if (
-            keccak256(abi.encodePacked(_str)) == keccak256(abi.encodePacked(""))
-        ) revert emptyString();
-    }
-
-    function _checkTimestamp(uint256 _timestamp) internal view {
-        if (_timestamp < block.timestamp) revert eventAlreadyHappened();
-    }
-
-    function _checkCaller(address _creator) internal view {
-        if (_creator != msg.sender) revert callerNotTheCreator();
-    }
-
-    function _checkAmount(uint256 _amount) internal view {
-        if (_amount == 0) revert amountEmpty();
-
-        if (_paymentToken.balanceOf(msg.sender) < _amount)
-            revert notEnoughBalance();
-
-        if (_paymentToken.allowance(msg.sender, address(this)) < _amount)
-            revert notEnoughAllowance();
-    }
-
-    function _transferAmount(uint256 _amount) internal {
-        bool success = _paymentToken.transferFrom(
-            msg.sender,
-            address(this),
-            _amount
-        );
-        if (!success) revert transferDidNotSucceed();
-    }
 
     function _depositPick(
         uint256 _amount,
@@ -222,7 +153,9 @@ contract DepositModule is OApp {
         }
     }
 
-    function _populateDuel(betDuelInput memory _newDuel) internal {
+    function _populateDuel(
+        coreModule.CreateDuelInput memory _newDuel
+    ) internal {
         betDuel storage _aux = duels[
             keccak256(abi.encode(_newDuel.eventTimestamp, _newDuel.duelTitle))
         ];
@@ -233,25 +166,108 @@ contract DepositModule is OApp {
         _aux.duelCreator = msg.sender;
     }
 
-    function _releaseGuarateed(bytes32 _id,uint256 _amount) internal{
-        if(duels[_id].duelCreator == address(0))
-        revert eventDoesNotExists();
+    function _releaseGuarateed(bytes32 _id, uint256 _amount) internal {
+        if (duels[_id].duelCreator == address(0)) revert eventDoesNotExists();
+        _5percent(_id, _amount);
+    }
 
-        if(duels[_id].guaranteed != _amount)
-        revert wrongAmountOrAlreadyTaken();
+    function _checkClaim(
+        string calldata _title,
+        uint256 _eventDate
+    ) internal returns (uint256) {
+        betDuel storage _aux = duels[keccak256(abi.encode(_eventDate, _title))];
+        require(!_aux.userClaimed[msg.sender], "User already claimed");
+        if (_aux.releaseReward == coreModule.pickOpts.opt1) {
+            require(
+                _aux.userDeposits[msg.sender]._amountOp1 > 0,
+                "No bets done on the winner"
+            );
+            _aux.userClaimed[msg.sender] = true;
+            return
+                (_aux.userDeposits[msg.sender]._amountOp1 * _aux.multiplier) /
+                1 ether;
+        } else if (_aux.releaseReward == coreModule.pickOpts.opt2) {
+            require(
+                _aux.userDeposits[msg.sender]._amountOp2 > 0,
+                "No bets done on the winner"
+            );
+            _aux.userClaimed[msg.sender] = true;
+            return
+                (_aux.userDeposits[msg.sender]._amountOp2 * _aux.multiplier) /
+                1 ether;
+        } else if (_aux.releaseReward == coreModule.pickOpts.opt3) {
+            require(
+                _aux.userDeposits[msg.sender]._amountOp3 > 0,
+                "No bets done on the winner"
+            );
+            _aux.userClaimed[msg.sender] = true;
+            return
+                (_aux.userDeposits[msg.sender]._amountOp3 * _aux.multiplier) /
+                1 ether;
+        }
+        revert duelNotReleased();
+    }
 
-        bool success = _paymentToken.transfer(duels[_id].duelCreator, _amount);
+    function _5percent(bytes32 id, uint256 totalPrizePool) internal {
+        uint256 _pay = (totalPrizePool * 0.03 ether) / 1 ether;
+        bool success = _paymentToken.transfer(_treasuryAccount, _pay);
+        if (!success) revert transferDidNotSucceed();
+        emit feeTaken(_treasuryAccount, _pay, block.chainid);
+
+        _pay = (totalPrizePool * 0.01 ether) / 1 ether;
+        success = _paymentToken.transfer(_operationManager, _pay);
+        if (!success) revert transferDidNotSucceed();
+        emit feeTaken(_operationManager, _pay, block.chainid);
+
+        _pay = (totalPrizePool * 0.01 ether) / 1 ether;
+        success = _paymentToken.transfer(duels[id].duelCreator, _pay);
+        if (!success) revert transferDidNotSucceed();
+        emit feeTaken(duels[id].duelCreator, _pay, block.chainid);
+    }
+
+    //----------------------------------------------------------------------------------------------------
+    //                                               EXTERNAL
+    //----------------------------------------------------------------------------------------------------
+
+    function ReleaseClaim(
+        bytes32 id,
+        uint8 opt,
+        uint256 multiplier,
+        uint256 totalPrizePool
+    ) external onlyOwner returns (bool) {
+        if (duels[id].releaseReward != pickOpts(0))
+            revert duelAlreadyReleased();
+        if (duels[id].multiplier != 0) revert duelAlreadyReleased();
+
+        if (totalPrizePool > 0) {
+            _5percent(id, totalPrizePool);
+        }
+
+        duels[id].releaseReward = pickOpts(opt);
+        duels[id].multiplier = multiplier;
+        emit Released(id, opt, multiplier, block.chainid);
+        return true;
+    }
+
+    function claimBet(
+        string calldata _title,
+        uint256 _eventDate
+    ) public notBlocked(_title, _eventDate) whenNotPaused returns (bool) {
+        uint256 _amount = _checkClaim(_title, _eventDate);
+
+        bool success = _paymentToken.transfer(msg.sender, _amount);
         if (!success) revert transferDidNotSucceed();
 
-        duels[_id].guaranteed = 0;
+        emit claimedBet(_title, _eventDate, msg.sender, _amount, block.chainid);
+
+        return success;
     }
 
     //----------------------------------------------------------------------------------------------------
     //                                               EXTERNAL PAYABLE
     //----------------------------------------------------------------------------------------------------
 
-    //@note implement release duel (internal function)
-    function betOnDuelClean(Bet memory _duel) external payable {
+    function betOnDuel(Bet memory _duel) external payable {
         _checkAmount(_duel._amount);
         _transferAmount(_duel._amount);
 
@@ -263,7 +279,7 @@ contract DepositModule is OApp {
             _id,
             _duel._opt,
             _duel._amount,
-            block.chainid+1,
+            block.chainid + 1,
             msg.sender
         );
 
@@ -277,6 +293,7 @@ contract DepositModule is OApp {
             payable(msg.sender)
         );
     }
+
     function betOnDuelFull(Bet memory _duel) external payable {
         _checkAmount(_duel._amount);
         _transferAmount(_duel._amount);
@@ -289,7 +306,7 @@ contract DepositModule is OApp {
             _id,
             _duel._opt,
             _duel._amount,
-            block.chainid+1,
+            block.chainid + 1,
             msg.sender
         );
 
@@ -304,8 +321,9 @@ contract DepositModule is OApp {
         );
     }
 
-    //@note correct implementation for internal function
-    function createDuel(betDuelInput memory _newDuel) public payable {
+    function createDuel(
+        coreModule.CreateDuelInput memory _newDuel
+    ) public payable onlyCreator {
         _checkEmpty(_newDuel.duelTitle);
         _checkEmpty(_newDuel.duelDescription);
         _checkEmpty(_newDuel.eventTitle);
@@ -323,7 +341,7 @@ contract DepositModule is OApp {
         bytes memory _payload = abi.encode(
             CREATE_DUEL_SELECTOR,
             _newDuel,
-            block.chainid+1,
+            block.chainid + 1,
             msg.sender
         );
 
@@ -342,8 +360,6 @@ contract DepositModule is OApp {
     //                                               CROSS-CHAIN MESSAGE
     //----------------------------------------------------------------------------------------------------
 
-    //@note release claim
-    //@note return guaranteed on the duel creation
     function _lzReceive(
         Origin calldata /* _origin*/,
         bytes32 /* _guid */,
@@ -351,23 +367,18 @@ contract DepositModule is OApp {
         address, // Executor address as specified by the OApp.
         bytes calldata // Any extra data or options to trigger on receipt.
     ) internal override {
-        if (
-            bytes4(payload[:4]) == RELEASE_DUEL_GUARANTEED
-        ){
-            (,bytes32 duel, /*uint256 chainId*/, uint256 amount) = abi.decode(
+        if (bytes4(payload[:4]) == RELEASE_DUEL_GUARANTEED) {
+            (, bytes32 duel /*uint256 chainId*/, , uint256 amount) = abi.decode(
                 payload,
-                (bytes4, bytes32, uint256,uint256)
+                (bytes4, bytes32, uint256, uint256)
             );
-            _releaseGuarateed(duel,amount);
-            emit GuaranteedTaken(duel,amount,duels[duel].duelCreator);
-        }else{
-            (bytes32 duel, uint8 opt, uint256 multiplier) = abi.decode(
-                payload,
-                (bytes32, uint8, uint256)
+            _releaseGuarateed(duel, amount);
+            emit GuaranteedTaken(
+                duel,
+                amount,
+                duels[duel].duelCreator,
+                block.chainid
             );
-            duels[duel].releaseReward = pickOpts(opt);
-            duels[duel].multiplier = multiplier;
-            emit Released(duel, opt, multiplier);
         }
     }
 
@@ -385,7 +396,8 @@ contract DepositModule is OApp {
         );
         return _quote(dstEid, _message, options, payInLzToken);
     }
-    function quoteBetOptions2(
+
+    function quoteBetFull(
         Bet memory _duel
     ) external view returns (MessagingFee memory) {
         bytes32 _id = keccak256(abi.encode(_duel._timestamp, _duel._title));
@@ -401,7 +413,7 @@ contract DepositModule is OApp {
     }
 
     function quoteNewDuel(
-        betDuelInput memory _duel
+        coreModule.CreateDuelInput memory _duel
     ) external view returns (MessagingFee memory) {
         // bytes32 _id = keccak256(
         //     abi.encode(_duel.eventTimestamp, _duel.duelTitle)
@@ -409,7 +421,7 @@ contract DepositModule is OApp {
         bytes memory _message = abi.encode(
             CREATE_DUEL_SELECTOR,
             _duel,
-            block.chainid+1,
+            block.chainid + 1,
             msg.sender
         );
         return _quote(dstEid, _message, options, payInLzToken);
