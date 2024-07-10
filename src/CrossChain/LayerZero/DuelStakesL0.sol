@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.2;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
 import {OApp, Origin, MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/OApp.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 
@@ -79,7 +77,7 @@ contract duelStakesL0 is coreModule, OApp {
         string _title,
         uint256 indexed _eventDate,
         pickOpts indexed _winner,
-        uint256 _chain
+        uint256 indexed _chain
     );
 
     //----------------------------------------------------------------------------------------------------
@@ -112,11 +110,16 @@ contract duelStakesL0 is coreModule, OApp {
         address _endpoint,
         address _owner,
         bool _payInLzToken
-    ) OApp(_endpoint, _owner) coreModule(_owner) {
-        _paymentToken = IERC20(__paymentToken);
+    )
+        OApp(_endpoint, _owner)
+        coreModule(
+            _owner,
+            __paymentToken,
+            __treasuryAccount,
+            __operationManager
+        )
+    {
         duelCreators[msg.sender] = true;
-        _treasuryAccount = __treasuryAccount;
-        _operationManager = __operationManager;
         payInLzToken = _payInLzToken;
     }
 

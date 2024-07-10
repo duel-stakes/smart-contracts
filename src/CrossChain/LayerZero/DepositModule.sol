@@ -3,8 +3,6 @@ pragma solidity ^0.8.20;
 
 import {MessagingFee, Origin, OApp, OAppCore} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/OApp.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {coreModule} from "./coreModule.sol";
 
@@ -107,10 +105,15 @@ contract DepositModule is coreModule, OApp {
         uint32 _dstEid,
         uint128 _lzGasLimit,
         bool _payInLzToken
-    ) OApp(_endpoint, _owner) coreModule(_owner) {
-        _paymentToken = IERC20(__paymentToken);
-        _treasuryAccount = __treasuryAccount;
-        _operationManager = __operationManager;
+    )
+        OApp(_endpoint, _owner)
+        coreModule(
+            _owner,
+            __paymentToken,
+            __treasuryAccount,
+            __operationManager
+        )
+    {
         options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(
             _lzGasLimit,
             0
