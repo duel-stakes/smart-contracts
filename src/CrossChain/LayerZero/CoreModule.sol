@@ -21,6 +21,12 @@ contract CoreModule is Ownable, Pausable {
     address public _operationManager;
 
     //----------------------------------------------------------------------------------------------------
+    //                                                  ROUTER
+    //----------------------------------------------------------------------------------------------------
+
+    address routerOperator;
+
+    //----------------------------------------------------------------------------------------------------
     //                                        CROSSCHAIN VARIABLES
     //----------------------------------------------------------------------------------------------------
 
@@ -93,6 +99,7 @@ contract CoreModule is Ownable, Pausable {
     error duelDoesNotExist();
     error duelIsBlocked();
     error pickNotAvailable();
+    error NotRouterOperator(address sender);
 
     //----------------------------------------------------------------------------------------------------
     //                                               EVENTS
@@ -130,6 +137,22 @@ contract CoreModule is Ownable, Pausable {
     modifier onlyCreator() {
         if (!duelCreators[msg.sender]) revert notAllowedCreator();
         _;
+    }
+
+    //----------------------------------------------------------------------------------------------------
+    //                                           CONSTRUCTOR
+    //----------------------------------------------------------------------------------------------------
+
+    constructor(
+        address _owner,
+        address __paymentToken,
+        address __treasuryAccount,
+        address __operationManager
+    ) Ownable(_owner) {
+        _paymentToken = IERC20(__paymentToken);
+        _treasuryAccount = __treasuryAccount;
+        _operationManager = __operationManager;
+        routerOperator = _owner;
     }
 
     //----------------------------------------------------------------------------------------------------
@@ -205,14 +228,34 @@ contract CoreModule is Ownable, Pausable {
         if (!success) revert transferDidNotSucceed();
     }
 
-    constructor(
-        address _owner,
-        address __paymentToken,
-        address __treasuryAccount,
-        address __operationManager
-    ) Ownable(_owner) {
-        _paymentToken = IERC20(__paymentToken);
-        _treasuryAccount = __treasuryAccount;
-        _operationManager = __operationManager;
+    //----------------------------------------------------------------------------------------------------
+    //                                               LIQUIDITY ROUTING
+    //----------------------------------------------------------------------------------------------------
+
+    function route(
+        address target,
+        uint256 amount,
+        bytes calldata data
+    ) external payable returns (bool) {
+        if (msg.sender != routerOperator || msg.sender != owner())
+            revert NotRouterOperator(msg.sender);
+
+        require(
+            _paymentToken.approve(target, amount),
+            "Deposit module: approve didn't go through"
+        );
+        (bool success, ) = payable(target).call{value: msg.value}(data);
+        return success;
+    }
+
+    //----------------------------------------------------------------------------------------------------
+    //                                       LIQUIDITY ROUTING CONFIGS
+    //----------------------------------------------------------------------------------------------------
+
+    function changeRouterOperator(address newRouter) external returns (bool) {
+        if (msg.sender != routerOperator || msg.sender == owner())
+            revert NotRouterOperator(msg.sender);
+        routerOperator = newRouter;
+        return true;
     }
 }

@@ -33,12 +33,6 @@ contract DepositModule is CoreModule, OApp {
     mapping(bytes32 => betDuel) public duels;
 
     //----------------------------------------------------------------------------------------------------
-    //                                                  ROUTER
-    //----------------------------------------------------------------------------------------------------
-
-    address routerOperator;
-
-    //----------------------------------------------------------------------------------------------------
     //                                        CROSSCHAIN VARIABLES
     //----------------------------------------------------------------------------------------------------
 
@@ -78,7 +72,6 @@ contract DepositModule is CoreModule, OApp {
     error eventDoesNotExists();
     error duelAlreadyReleased();
     error duelNotReleased();
-    error NotRouterOperator(address);
 
     //----------------------------------------------------------------------------------------------------
     //                                               MODIFIERS
@@ -131,7 +124,6 @@ contract DepositModule is CoreModule, OApp {
         );
         dstEid = _dstEid;
         payInLzToken = _payInLzToken;
-        routerOperator = _owner;
     }
 
     //----------------------------------------------------------------------------------------------------
@@ -438,36 +430,5 @@ contract DepositModule is CoreModule, OApp {
             msg.sender
         );
         return _quote(dstEid, _message, options, payInLzToken);
-    }
-
-    //----------------------------------------------------------------------------------------------------
-    //                                               LIQUIDITY ROUTING
-    //----------------------------------------------------------------------------------------------------
-
-    function route(
-        address target,
-        uint256 amount,
-        bytes calldata data
-    ) external payable returns (bool) {
-        if (msg.sender != routerOperator || msg.sender != owner())
-            revert NotRouterOperator(msg.sender);
-
-        require(
-            _paymentToken.approve(target, amount),
-            "Deposit module: approve didn't go through"
-        );
-        (bool success, ) = payable(target).call{value: msg.value}(data);
-        return success;
-    }
-
-    //----------------------------------------------------------------------------------------------------
-    //                                       LIQUIDITY ROUTING CONFIGS
-    //----------------------------------------------------------------------------------------------------
-
-    function changeRouterOperator(address newRouter) external returns (bool) {
-        if (msg.sender != routerOperator || msg.sender == owner())
-            revert NotRouterOperator(msg.sender);
-        routerOperator = newRouter;
-        return true;
     }
 }
