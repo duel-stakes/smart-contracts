@@ -676,7 +676,7 @@ contract CrossChainTest is Test {
         uint256 multiplier = (total * 1 ether) / amount1_;
 
         console.log("balance Owner before:", dummyToken.balanceOf(owner));
-        deposit.ReleaseClaim(_id, 1, multiplier, total);
+        deposit.releaseClaim(_id, 1, multiplier, total);
 
         console.log("multiplier:", multiplier);
         assertNotEq(balanceAfter, dummyToken.balanceOf(owner));

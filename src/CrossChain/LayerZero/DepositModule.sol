@@ -232,7 +232,7 @@ contract DepositModule is CoreModule, OApp {
     //                                               EXTERNAL
     //----------------------------------------------------------------------------------------------------
 
-    function ReleaseClaim(
+    function releaseClaim(
         bytes32 id,
         uint8 opt,
         uint256 multiplier,
