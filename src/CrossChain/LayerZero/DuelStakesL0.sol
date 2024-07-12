@@ -260,7 +260,7 @@ contract duelStakesL0 is coreModule, OApp {
             _releaseGuaranteed(
                 _title,
                 _eventDate,
-                _aux.totalPrizePool,
+                _aux.unclaimedPrizePool - _aux.totalPrizePool,
                 _aux.chainId
             );
             _aux.totalPrizePool = _aux.unclaimedPrizePool;
