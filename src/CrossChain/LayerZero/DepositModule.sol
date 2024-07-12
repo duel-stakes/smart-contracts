@@ -4,9 +4,9 @@ pragma solidity ^0.8.20;
 import {MessagingFee, Origin, OApp, OAppCore} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/OApp.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 
-import {coreModule} from "./coreModule.sol";
+import {CoreModule} from "./CoreModule.sol";
 
-contract DepositModule is coreModule, OApp {
+contract DepositModule is CoreModule, OApp {
     using OptionsBuilder for bytes;
 
     //----------------------------------------------------------------------------------------------------
@@ -114,7 +114,7 @@ contract DepositModule is coreModule, OApp {
         bool _payInLzToken
     )
         OApp(_endpoint, _owner)
-        coreModule(
+        CoreModule(
             _owner,
             __paymentToken,
             __treasuryAccount,
@@ -165,7 +165,7 @@ contract DepositModule is coreModule, OApp {
     }
 
     function _populateDuel(
-        coreModule.CreateDuelInput memory _newDuel
+        CoreModule.CreateDuelInput memory _newDuel
     ) internal {
         betDuel storage _aux = duels[
             keccak256(abi.encode(_newDuel.eventTimestamp, _newDuel.duelTitle))
@@ -190,7 +190,7 @@ contract DepositModule is coreModule, OApp {
     ) internal returns (uint256) {
         betDuel storage _aux = duels[keccak256(abi.encode(_eventDate, _title))];
         require(!_aux.userClaimed[msg.sender], "User already claimed");
-        if (_aux.releaseReward == coreModule.pickOpts.opt1) {
+        if (_aux.releaseReward == CoreModule.pickOpts.opt1) {
             require(
                 _aux.userDeposits[msg.sender]._amountOp1 > 0,
                 "No bets done on the winner"
@@ -199,7 +199,7 @@ contract DepositModule is coreModule, OApp {
             return
                 (_aux.userDeposits[msg.sender]._amountOp1 * _aux.multiplier) /
                 1 ether;
-        } else if (_aux.releaseReward == coreModule.pickOpts.opt2) {
+        } else if (_aux.releaseReward == CoreModule.pickOpts.opt2) {
             require(
                 _aux.userDeposits[msg.sender]._amountOp2 > 0,
                 "No bets done on the winner"
@@ -208,7 +208,7 @@ contract DepositModule is coreModule, OApp {
             return
                 (_aux.userDeposits[msg.sender]._amountOp2 * _aux.multiplier) /
                 1 ether;
-        } else if (_aux.releaseReward == coreModule.pickOpts.opt3) {
+        } else if (_aux.releaseReward == CoreModule.pickOpts.opt3) {
             require(
                 _aux.userDeposits[msg.sender]._amountOp3 > 0,
                 "No bets done on the winner"
@@ -242,7 +242,7 @@ contract DepositModule is coreModule, OApp {
     //                                               EXTERNAL
     //----------------------------------------------------------------------------------------------------
 
-    function ReleaseClaim(
+    function releaseClaim(
         bytes32 id,
         uint8 opt,
         uint256 multiplier,
@@ -252,7 +252,7 @@ contract DepositModule is coreModule, OApp {
             revert duelAlreadyReleased();
         if (duels[id].multiplier != 0) revert duelAlreadyReleased();
 
-        if (totalPrizePool > 0) {
+        if (totalPrizePool > 0 && duels[id].duelCreator != address(0)) {
             _5percent(id, totalPrizePool);
         }
 
@@ -335,7 +335,7 @@ contract DepositModule is coreModule, OApp {
     }
 
     function createDuel(
-        coreModule.CreateDuelInput memory _newDuel
+        CoreModule.CreateDuelInput memory _newDuel
     ) public payable onlyCreator {
         _checkEmpty(_newDuel.duelTitle);
         _checkEmpty(_newDuel.duelDescription);
@@ -426,7 +426,7 @@ contract DepositModule is coreModule, OApp {
     }
 
     function quoteNewDuel(
-        coreModule.CreateDuelInput memory _duel
+        CoreModule.CreateDuelInput memory _duel
     ) external view returns (MessagingFee memory) {
         // bytes32 _id = keccak256(
         //     abi.encode(_duel.eventTimestamp, _duel.duelTitle)

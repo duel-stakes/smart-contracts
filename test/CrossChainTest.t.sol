@@ -4,7 +4,7 @@ pragma solidity ^0.8.2;
 import {Test, console} from "forge-std/Test.sol";
 import {DepositModule, MessagingFee} from "../src/CrossChain/LayerZero/DepositModule.sol";
 import {duelStakesL0} from "../src/CrossChain/LayerZero/DuelStakesL0.sol";
-import {coreModule} from "../src/CrossChain/LayerZero/coreModule.sol";
+import {CoreModule} from "../src/CrossChain/LayerZero/CoreModule.sol";
 import {EndpointV2Mock} from "@layerzerolabs/devtools/packages/test-devtools-evm-hardhat/contracts/mocks/EndpointV2Mock.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 import {mockERC20} from "./utils/mockERC20.sol";
@@ -80,7 +80,7 @@ contract CrossChainTest is Test {
 
     function test_duelOnReceiver_BetOnDepositModule_WithoutRelease() public {
         vm.startPrank(owner, owner);
-        coreModule.CreateDuelInput memory params = coreModule.CreateDuelInput({
+        CoreModule.CreateDuelInput memory params = CoreModule.CreateDuelInput({
             duelTitle: "Test VS Test",
             duelDescription: "This is a description of test vs test",
             eventTitle: "Test function fighting test function",
@@ -99,7 +99,7 @@ contract CrossChainTest is Test {
         DepositModule.Bet memory newBet = DepositModule.Bet({
             _title: "Test VS Test",
             _timestamp: block.timestamp + 120 days,
-            _opt: coreModule.pickOpts(1),
+            _opt: CoreModule.pickOpts(1),
             _amount: amount
         });
 
@@ -111,7 +111,7 @@ contract CrossChainTest is Test {
         emit duelStakesL0.duelBet(
             user,
             newBet._amount,
-            coreModule.pickOpts(uint8(newBet._opt)),
+            CoreModule.pickOpts(uint8(newBet._opt)),
             newBet._title,
             newBet._timestamp,
             block.chainid + 1
@@ -138,7 +138,7 @@ contract CrossChainTest is Test {
 
     function test_duelOnReceiver_BetOnDepositModule_WithRelease() public {
         vm.startPrank(owner, owner);
-        coreModule.CreateDuelInput memory params = coreModule.CreateDuelInput({
+        CoreModule.CreateDuelInput memory params = CoreModule.CreateDuelInput({
             duelTitle: "Test VS Test",
             duelDescription: "This is a description of test vs test",
             eventTitle: "Test function fighting test function",
@@ -157,7 +157,7 @@ contract CrossChainTest is Test {
         DepositModule.Bet memory newBet = DepositModule.Bet({
             _title: "Test VS Test",
             _timestamp: block.timestamp + 120 days,
-            _opt: coreModule.pickOpts(1),
+            _opt: CoreModule.pickOpts(1),
             _amount: amount
         });
 
@@ -169,7 +169,7 @@ contract CrossChainTest is Test {
         emit duelStakesL0.duelBet(
             user,
             newBet._amount,
-            coreModule.pickOpts(uint8(newBet._opt)),
+            CoreModule.pickOpts(uint8(newBet._opt)),
             newBet._title,
             newBet._timestamp,
             block.chainid + 1
@@ -195,7 +195,7 @@ contract CrossChainTest is Test {
 
     function test_duelOnReceiver_BetOnReceiver_WithoutRelease() public {
         vm.startPrank(owner, owner);
-        coreModule.CreateDuelInput memory params = coreModule.CreateDuelInput({
+        CoreModule.CreateDuelInput memory params = CoreModule.CreateDuelInput({
             duelTitle: "Test VS Test",
             duelDescription: "This is a description of test vs test",
             eventTitle: "Test function fighting test function",
@@ -214,7 +214,7 @@ contract CrossChainTest is Test {
         DepositModule.Bet memory newBet = DepositModule.Bet({
             _title: "Test VS Test",
             _timestamp: block.timestamp + 120 days,
-            _opt: coreModule.pickOpts(1),
+            _opt: CoreModule.pickOpts(1),
             _amount: amount
         });
 
@@ -224,7 +224,7 @@ contract CrossChainTest is Test {
         emit duelStakesL0.duelBet(
             user,
             newBet._amount,
-            coreModule.pickOpts(uint8(newBet._opt)),
+            CoreModule.pickOpts(uint8(newBet._opt)),
             newBet._title,
             newBet._timestamp,
             block.chainid
@@ -233,7 +233,7 @@ contract CrossChainTest is Test {
         receiver.betOnDuel(
             newBet._title,
             newBet._timestamp,
-            coreModule.pickOpts(uint8(newBet._opt)),
+            CoreModule.pickOpts(uint8(newBet._opt)),
             newBet._amount
         );
         (uint256 amount1 /*uint256 amount2*/ /*uint256 amount3*/, , ) = receiver
@@ -256,7 +256,7 @@ contract CrossChainTest is Test {
 
     function test_duelOnReceiver_BetOnReceiver_WithRelease() public {
         vm.startPrank(owner, owner);
-        coreModule.CreateDuelInput memory params = coreModule.CreateDuelInput({
+        CoreModule.CreateDuelInput memory params = CoreModule.CreateDuelInput({
             duelTitle: "Test VS Test",
             duelDescription: "This is a description of test vs test",
             eventTitle: "Test function fighting test function",
@@ -275,7 +275,7 @@ contract CrossChainTest is Test {
         DepositModule.Bet memory newBet = DepositModule.Bet({
             _title: "Test VS Test",
             _timestamp: block.timestamp + 120 days,
-            _opt: coreModule.pickOpts(1),
+            _opt: CoreModule.pickOpts(1),
             _amount: amount
         });
 
@@ -285,7 +285,7 @@ contract CrossChainTest is Test {
         emit duelStakesL0.duelBet(
             user,
             newBet._amount,
-            coreModule.pickOpts(uint8(newBet._opt)),
+            CoreModule.pickOpts(uint8(newBet._opt)),
             newBet._title,
             newBet._timestamp,
             block.chainid
@@ -296,7 +296,7 @@ contract CrossChainTest is Test {
         receiver.betOnDuel{value: fee.nativeFee}(
             newBet._title,
             newBet._timestamp,
-            coreModule.pickOpts(uint8(newBet._opt)),
+            CoreModule.pickOpts(uint8(newBet._opt)),
             newBet._amount
         );
         (uint256 amount1 /*uint256 amount2*/ /*uint256 amount3*/, , ) = receiver
@@ -318,7 +318,7 @@ contract CrossChainTest is Test {
 
     function test_duelOnDepositModule_BetOnReceiver_WithRelease() public {
         vm.startPrank(owner, owner);
-        coreModule.CreateDuelInput memory params = coreModule.CreateDuelInput({
+        CoreModule.CreateDuelInput memory params = CoreModule.CreateDuelInput({
             duelTitle: "Test VS Test",
             duelDescription: "This is a description of test vs test",
             eventTitle: "Test function fighting test function",
@@ -338,7 +338,7 @@ contract CrossChainTest is Test {
         DepositModule.Bet memory newBet = DepositModule.Bet({
             _title: params.duelTitle,
             _timestamp: params.eventTimestamp,
-            _opt: coreModule.pickOpts(1),
+            _opt: CoreModule.pickOpts(1),
             _amount: amount
         });
 
@@ -350,7 +350,7 @@ contract CrossChainTest is Test {
         emit duelStakesL0.duelBet(
             user,
             newBet._amount,
-            coreModule.pickOpts(uint8(newBet._opt)),
+            CoreModule.pickOpts(uint8(newBet._opt)),
             newBet._title,
             newBet._timestamp,
             block.chainid
@@ -359,7 +359,7 @@ contract CrossChainTest is Test {
         receiver.betOnDuel{value: fee.nativeFee}(
             newBet._title,
             newBet._timestamp,
-            coreModule.pickOpts(uint8(newBet._opt)),
+            CoreModule.pickOpts(uint8(newBet._opt)),
             newBet._amount
         );
         vm.stopPrank();
@@ -382,7 +382,7 @@ contract CrossChainTest is Test {
 
     function test_duelOnDepositModule_BetOnReceiver_WithoutRelease() public {
         vm.startPrank(owner, owner);
-        coreModule.CreateDuelInput memory params = coreModule.CreateDuelInput({
+        CoreModule.CreateDuelInput memory params = CoreModule.CreateDuelInput({
             duelTitle: "Test VS Test",
             duelDescription: "This is a description of test vs test",
             eventTitle: "Test function fighting test function",
@@ -402,7 +402,7 @@ contract CrossChainTest is Test {
         DepositModule.Bet memory newBet = DepositModule.Bet({
             _title: params.duelTitle,
             _timestamp: params.eventTimestamp,
-            _opt: coreModule.pickOpts(1),
+            _opt: CoreModule.pickOpts(1),
             _amount: amount
         });
         dummyToken.approve(address(receiver), amount);
@@ -411,7 +411,7 @@ contract CrossChainTest is Test {
         emit duelStakesL0.duelBet(
             user,
             newBet._amount,
-            coreModule.pickOpts(uint8(newBet._opt)),
+            CoreModule.pickOpts(uint8(newBet._opt)),
             newBet._title,
             newBet._timestamp,
             block.chainid
@@ -420,7 +420,7 @@ contract CrossChainTest is Test {
         receiver.betOnDuel(
             newBet._title,
             newBet._timestamp,
-            coreModule.pickOpts(uint8(newBet._opt)),
+            CoreModule.pickOpts(uint8(newBet._opt)),
             newBet._amount
         );
         vm.stopPrank();
@@ -445,7 +445,7 @@ contract CrossChainTest is Test {
         public
     {
         vm.startPrank(owner, owner);
-        coreModule.CreateDuelInput memory params = coreModule.CreateDuelInput({
+        CoreModule.CreateDuelInput memory params = CoreModule.CreateDuelInput({
             duelTitle: "Test VS Test",
             duelDescription: "This is a description of test vs test",
             eventTitle: "Test function fighting test function",
@@ -465,7 +465,7 @@ contract CrossChainTest is Test {
         DepositModule.Bet memory newBet = DepositModule.Bet({
             _title: params.duelTitle,
             _timestamp: params.eventTimestamp,
-            _opt: coreModule.pickOpts(1),
+            _opt: CoreModule.pickOpts(1),
             _amount: amount
         });
 
@@ -477,7 +477,7 @@ contract CrossChainTest is Test {
         emit duelStakesL0.duelBet(
             user,
             newBet._amount,
-            coreModule.pickOpts(uint8(newBet._opt)),
+            CoreModule.pickOpts(uint8(newBet._opt)),
             newBet._title,
             newBet._timestamp,
             block.chainid + 1
@@ -518,7 +518,7 @@ contract CrossChainTest is Test {
 
     function test_duelOnDepositModule_BetOnDepositModuler_WithRelease() public {
         vm.startPrank(owner, owner);
-        coreModule.CreateDuelInput memory params = coreModule.CreateDuelInput({
+        CoreModule.CreateDuelInput memory params = CoreModule.CreateDuelInput({
             duelTitle: "Test VS Test",
             duelDescription: "This is a description of test vs test",
             eventTitle: "Test function fighting test function",
@@ -538,7 +538,7 @@ contract CrossChainTest is Test {
         DepositModule.Bet memory newBet = DepositModule.Bet({
             _title: params.duelTitle,
             _timestamp: params.eventTimestamp,
-            _opt: coreModule.pickOpts(1),
+            _opt: CoreModule.pickOpts(1),
             _amount: amount
         });
 
@@ -550,7 +550,7 @@ contract CrossChainTest is Test {
         emit duelStakesL0.duelBet(
             user,
             newBet._amount,
-            coreModule.pickOpts(uint8(newBet._opt)),
+            CoreModule.pickOpts(uint8(newBet._opt)),
             newBet._title,
             newBet._timestamp,
             block.chainid + 1
@@ -590,7 +590,7 @@ contract CrossChainTest is Test {
         public
     {
         vm.startPrank(owner, owner);
-        coreModule.CreateDuelInput memory params = coreModule.CreateDuelInput({
+        CoreModule.CreateDuelInput memory params = CoreModule.CreateDuelInput({
             duelTitle: "Test VS Test",
             duelDescription: "This is a description of test vs test",
             eventTitle: "Test function fighting test function",
@@ -612,7 +612,7 @@ contract CrossChainTest is Test {
         DepositModule.Bet memory newBet = DepositModule.Bet({
             _title: params.duelTitle,
             _timestamp: params.eventTimestamp,
-            _opt: coreModule.pickOpts(1),
+            _opt: CoreModule.pickOpts(1),
             _amount: amount
         });
 
@@ -624,7 +624,7 @@ contract CrossChainTest is Test {
         emit duelStakesL0.duelBet(
             user,
             newBet._amount,
-            coreModule.pickOpts(uint8(newBet._opt)),
+            CoreModule.pickOpts(uint8(newBet._opt)),
             newBet._title,
             newBet._timestamp,
             block.chainid + 1
@@ -663,7 +663,7 @@ contract CrossChainTest is Test {
         receiver.releaseBet{value: fee.nativeFee}(
             newBet._title,
             newBet._timestamp,
-            coreModule.pickOpts(uint8(1))
+            CoreModule.pickOpts(uint8(1))
         );
 
         (total, amount1_, , , ) = receiver.getPrizes(
@@ -676,7 +676,7 @@ contract CrossChainTest is Test {
         uint256 multiplier = (total * 1 ether) / amount1_;
 
         console.log("balance Owner before:", dummyToken.balanceOf(owner));
-        deposit.ReleaseClaim(_id, 1, multiplier, total);
+        deposit.releaseClaim(_id, 1, multiplier, total);
 
         console.log("multiplier:", multiplier);
         assertNotEq(balanceAfter, dummyToken.balanceOf(owner));

@@ -4,11 +4,11 @@ pragma solidity ^0.8.2;
 import {OApp, Origin, MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/OApp.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 
-import {coreModule} from "./coreModule.sol";
+import {CoreModule} from "./CoreModule.sol";
 
 ///@author Waiandt.eth
 
-contract duelStakesL0 is coreModule, OApp {
+contract duelStakesL0 is CoreModule, OApp {
     using OptionsBuilder for bytes;
     //----------------------------------------------------------------------------------------------------
     //                                               STORAGE
@@ -112,7 +112,7 @@ contract duelStakesL0 is coreModule, OApp {
         bool _payInLzToken
     )
         OApp(_endpoint, _owner)
-        coreModule(
+        CoreModule(
             _owner,
             __paymentToken,
             __treasuryAccount,
@@ -151,7 +151,7 @@ contract duelStakesL0 is coreModule, OApp {
     //----------------------------------------------------------------------------------------------------
 
     function createDuel(
-        coreModule.CreateDuelInput calldata _newDuel
+        CoreModule.CreateDuelInput calldata _newDuel
     ) public onlyCreator whenNotPaused {
         _checkEmpty(_newDuel.duelTitle);
         _checkEmpty(_newDuel.duelDescription);
@@ -425,7 +425,7 @@ contract duelStakesL0 is coreModule, OApp {
     }
 
     function _populateDuel(
-        coreModule.CreateDuelInput memory _newDuel,
+        CoreModule.CreateDuelInput memory _newDuel,
         uint256 _chainId
     ) internal {
         betDuel storage _aux = duels[
@@ -554,12 +554,12 @@ contract duelStakesL0 is coreModule, OApp {
         } else if (bytes4(payload[:4]) == CREATE_DUEL_SELECTOR) {
             (
                 ,
-                coreModule.CreateDuelInput memory _newDuel,
+                CoreModule.CreateDuelInput memory _newDuel,
                 uint256 chainId,
 
             ) = abi.decode(
                     payload,
-                    (bytes4, coreModule.CreateDuelInput, uint256, address)
+                    (bytes4, CoreModule.CreateDuelInput, uint256, address)
                 );
             _createDuel(_newDuel, chainId);
         }
@@ -609,7 +609,7 @@ contract duelStakesL0 is coreModule, OApp {
 
     // @note check if timestamps in all chains are equeal
     function _createDuel(
-        coreModule.CreateDuelInput memory _newDuel,
+        CoreModule.CreateDuelInput memory _newDuel,
         uint256 _chainId
     ) internal whenNotPaused {
         _checkTimestamp(_newDuel.eventTimestamp);
