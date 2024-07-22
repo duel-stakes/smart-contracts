@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.2;
-
-import {OApp, Origin, MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/OApp.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
-
-import {CoreModule} from "./CoreModule.sol";
+import {CoreModule, Origin, MessagingFee} from "./CoreModule.sol";
 
 ///@author Waiandt.eth
 
-contract duelStakesL0 is CoreModule, OApp {
+contract duelStakesL0 is CoreModule {
     using OptionsBuilder for bytes;
     //----------------------------------------------------------------------------------------------------
     //                                               STORAGE
@@ -104,21 +101,24 @@ contract duelStakesL0 is CoreModule, OApp {
     //----------------------------------------------------------------------------------------------------
 
     constructor(
+        address _endpoint,
+        address _owner
+    ) CoreModule(_endpoint, _owner) {}
+
+    function initialize(
         address __paymentToken,
         address __treasuryAccount,
         address __operationManager,
         address _endpoint,
         address _owner,
         bool _payInLzToken
-    )
-        OApp(_endpoint, _owner)
-        CoreModule(
+    ) external reinitializer(uint64(1)) {
+        __core_init(
             _owner,
             __paymentToken,
             __treasuryAccount,
             __operationManager
-        )
-    {
+        );
         duelCreators[msg.sender] = true;
         payInLzToken = _payInLzToken;
     }

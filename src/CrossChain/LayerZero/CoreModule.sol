@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
-import {Pausable} from "lib/openzeppelin-contracts/contracts/utils/Pausable.sol";
+import {OApp, Origin, MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/OApp.sol";
+import {UUPSUpgradeable, ERC1967Utils} from "lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol";
+import {Initializable} from "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
-contract CoreModule is Ownable, Pausable {
+abstract contract CoreModule is OApp, UUPSUpgradeable, Initializable {
     //----------------------------------------------------------------------------------------------------
     //                                               STORAGE
     //----------------------------------------------------------------------------------------------------
 
     mapping(address => bool) public duelCreators;
+    bool public paused;
 
     //----------------------------------------------------------------------------------------------------
     //                                               ERC20 IDENTIFIER
@@ -144,16 +147,46 @@ contract CoreModule is Ownable, Pausable {
     //----------------------------------------------------------------------------------------------------
 
     constructor(
+        address _endpoint,
+        address _owner
+    ) OApp(_endpoint, _owner) Ownable(_owner) {}
+
+    function __core_init(
         address _owner,
         address __paymentToken,
         address __treasuryAccount,
         address __operationManager
-    ) Ownable(_owner) {
+    ) internal {
+        paused = false;
         _paymentToken = IERC20(__paymentToken);
         _treasuryAccount = __treasuryAccount;
         _operationManager = __operationManager;
         routerOperator = _owner;
     }
+
+    /// -----------------------------------------------------------------------
+    /// View external proxy functions
+    /// -----------------------------------------------------------------------
+    /**
+     * @notice Gets the implementation address.
+     * @dev Uses OpenZeppelin's {ERC1967Utils} contract.
+     * @return - address - address of the implementation contract.
+     */
+    function getImplementation() external view returns (address) {
+        return ERC1967Utils.getImplementation();
+    }
+
+    /// -----------------------------------------------------------------------
+    /// View internal/private proxy functions
+    /// -----------------------------------------------------------------------
+
+    /**
+     * @inheritdoc UUPSUpgradeable
+     * @dev Only owner can upgrade contract.
+     */
+    function _authorizeUpgrade(
+        address /* newImplementation */
+    ) internal view override(UUPSUpgradeable) onlyOwner {}
 
     //----------------------------------------------------------------------------------------------------
     //                                           DUELS ADJUSTMENT MANAGER
@@ -168,11 +201,11 @@ contract CoreModule is Ownable, Pausable {
     }
 
     function pause() public onlyOwner {
-        _pause();
+        paused = true;
     }
 
     function unpause() public onlyOwner {
-        _pause();
+        paused = false;
     }
 
     //----------------------------------------------------------------------------------------------------
@@ -226,6 +259,30 @@ contract CoreModule is Ownable, Pausable {
             _amount
         );
         if (!success) revert transferDidNotSucceed();
+    }
+
+    /**
+     * @dev Modifier to make a function callable only when the contract is not paused.
+     *
+     * Requirements:
+     *
+     * - The contract must not be paused.
+     */
+    modifier whenNotPaused() {
+        require(paused == false, "Contract must not be paused");
+        _;
+    }
+
+    /**
+     * @dev Modifier to make a function callable only when the contract is paused.
+     *
+     * Requirements:
+     *
+     * - The contract must be paused.
+     */
+    modifier whenPaused() {
+        require(paused == true, "Contract must be paused");
+        _;
     }
 
     //----------------------------------------------------------------------------------------------------
