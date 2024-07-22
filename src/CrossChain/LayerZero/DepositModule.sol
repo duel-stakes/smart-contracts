@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {MessagingFee, Origin, OApp, OAppCore} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/OApp.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 
-import {CoreModule} from "./CoreModule.sol";
+import {CoreModule, Origin, MessagingFee} from "./CoreModule.sol";
 
-contract DepositModule is CoreModule, OApp {
+contract DepositModule is CoreModule {
     using OptionsBuilder for bytes;
 
     //----------------------------------------------------------------------------------------------------
@@ -36,7 +35,7 @@ contract DepositModule is CoreModule, OApp {
     //                                        CROSSCHAIN VARIABLES
     //----------------------------------------------------------------------------------------------------
 
-    uint32 dstEid;
+    uint32 public dstEid;
     bytes options;
     bytes options2;
 
@@ -98,6 +97,10 @@ contract DepositModule is CoreModule, OApp {
 
     constructor(
         address _endpoint,
+        address _owner
+    ) CoreModule(_endpoint, _owner) {}
+
+    function initialize(
         address _owner,
         address __paymentToken,
         address __treasuryAccount,
@@ -105,15 +108,13 @@ contract DepositModule is CoreModule, OApp {
         uint32 _dstEid,
         uint128 _lzGasLimit,
         bool _payInLzToken
-    )
-        OApp(_endpoint, _owner)
-        CoreModule(
+    ) external reinitializer(uint64(1)) {
+        __core_init(
             _owner,
             __paymentToken,
             __treasuryAccount,
             __operationManager
-        )
-    {
+        );
         options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(
             _lzGasLimit,
             0
@@ -171,7 +172,9 @@ contract DepositModule is CoreModule, OApp {
 
     function _releaseGuarateed(bytes32 _id, uint256 _amount) internal {
         if (duels[_id].duelCreator == address(0)) revert eventDoesNotExists();
-        _5percent(_id, _amount);
+        bool success = _paymentToken.transfer(duels[_id].duelCreator, _amount);
+        if (!success) revert transferDidNotSucceed();
+        emit feeTaken(duels[_id].duelCreator, _amount, block.chainid);
     }
 
     function _checkClaim(

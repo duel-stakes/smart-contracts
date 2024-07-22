@@ -38,8 +38,9 @@ contract CrossChainTest is Test {
         endpointA = new EndpointV2Mock(eIdA);
         endpointB = new EndpointV2Mock(eIdB);
 
-        deposit = new DepositModule(
-            address(endpointA),
+        deposit = new DepositModule(address(endpointA), owner);
+
+        deposit.initialize(
             owner,
             address(dummyToken),
             _treasuryAccount,
@@ -48,7 +49,8 @@ contract CrossChainTest is Test {
             257000,
             false
         );
-        receiver = new duelStakesL0(
+        receiver = new duelStakesL0(address(endpointB), owner);
+        receiver.initialize(
             address(dummyToken),
             _treasuryAccount,
             _operationManager,
@@ -690,4 +692,11 @@ contract CrossChainTest is Test {
         console.log("balance User after:", dummyToken.balanceOf(user));
         console.log("balance Owner after:", dummyToken.balanceOf(owner));
     }
+
+    // function test_ownable() public {
+    //     console.log("eid: ", deposit.dstEid());
+    //     vm.prank(owner, owner);
+    //     deposit.changeEId(10);
+    //     console.log("eid: ", deposit.dstEid());
+    // }
 }
