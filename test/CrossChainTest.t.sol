@@ -54,7 +54,6 @@ contract CrossChainTest is Test {
             address(dummyToken),
             _treasuryAccount,
             _operationManager,
-            address(endpointB),
             owner,
             false
         );

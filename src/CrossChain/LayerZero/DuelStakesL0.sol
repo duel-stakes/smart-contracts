@@ -109,7 +109,6 @@ contract duelStakesL0 is CoreModule {
         address __paymentToken,
         address __treasuryAccount,
         address __operationManager,
-        address _endpoint,
         address _owner,
         bool _payInLzToken
     ) external reinitializer(uint64(1)) {
