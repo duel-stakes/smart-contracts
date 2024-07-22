@@ -77,7 +77,8 @@ contract duelStakesL0 is CoreModule, OApp {
         string _title,
         uint256 indexed _eventDate,
         pickOpts indexed _winner,
-        uint256 indexed _chain
+        uint256 indexed _chain,
+        uint256 totalPrizePool
     );
 
     //----------------------------------------------------------------------------------------------------
@@ -264,11 +265,16 @@ contract duelStakesL0 is CoreModule, OApp {
                 _aux.chainId
             );
             _aux.totalPrizePool = _aux.unclaimedPrizePool;
-            //@note implement 5percent somehow
         }
         _aux.releaseReward = _winner;
         _aux.unclaimedPrizePool = _aux.totalPrizePool;
-        emit betClosed(_title, _eventDate, _winner, block.chainid);
+        emit betClosed(
+            _title,
+            _eventDate,
+            _winner,
+            block.chainid,
+            _aux.totalPrizePool
+        );
     }
 
     function claimBet(
