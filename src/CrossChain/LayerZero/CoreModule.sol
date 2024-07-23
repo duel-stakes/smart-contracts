@@ -157,6 +157,7 @@ abstract contract CoreModule is OApp, UUPSUpgradeable, Initializable {
         address __treasuryAccount,
         address __operationManager
     ) internal {
+        _transferOwnership(_owner);
         paused = false;
         _paymentToken = IERC20(__paymentToken);
         _treasuryAccount = __treasuryAccount;

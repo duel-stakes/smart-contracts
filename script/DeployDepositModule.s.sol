@@ -12,10 +12,17 @@ contract DeployDepositModule is Script {
     ERC1967Proxy public proxy;
 
     // SET THESE VALUES
-    uint32 public DST_EID;
+    uint32 public DST_EID = 30126;
     uint128 public LZ_GAS_LIMIT;
 
-    address public DuelStakesL0;
+    address public DuelStakesL0 = 0x55e038ED52627A676a42063e9b2f0b44BDF43F6d;
+
+    //   DepositModule Trial 0 moonbeam
+    //     proxy: 0x56BE283089Db404784DB156A49746eB4199A8dc0
+    //     implementation: 0xab0A62157ec43B3Cb504490a3Aa05d724840ff48
+    // DepositModule Trial 1 polygon
+    //     proxy: 0xaBaAbF95182937c379de2Fc5689909e1F4C05BC2
+    //     implementation: 0x4FC0ac125c5c4bb45E4a69e2551E5471FB71907d
 
     function run() public {
         config = new HelperConfig();

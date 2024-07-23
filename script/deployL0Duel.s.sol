@@ -6,10 +6,17 @@ import {HelperConfig} from "./HelperConfig.s.sol";
 import {DuelStakesL0} from "../src/CrossChain/LayerZero/DuelStakesL0.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
-contract DeployDepositModule is Script {
+contract DeployL0 is Script {
     HelperConfig public config;
     DuelStakesL0 public duelStakesL0;
     ERC1967Proxy public proxy;
+
+    //Duel Stakes L0 moonbeam trial 0
+    // proxy: 0x44852b34a2111247F2015e2Ab5A80d02A2B17715
+    // implementation: 0x09ccC4FF970827802380e9E47A933A9F0A749590
+    //Duel Stakes L0 moonbeam trial 1
+    // proxy: 0x55e038ED52627A676a42063e9b2f0b44BDF43F6d
+    // implementation: 0x0E34CA4785Dd129d99BE91C80E006C34d4eCADb3
 
     // SET THESE VALUES
     uint32 public DST_EID;
@@ -44,20 +51,14 @@ contract DeployDepositModule is Script {
 
         vm.startBroadcast(key);
 
-        duelStakesL0 = new DuelStakesL0(endpoint, owner);
-        proxy = new ERC1967Proxy(address(duelStakesL0), init);
+        // duelStakesL0 = new DuelStakesL0(endpoint, owner);
+        duelStakesL0 = DuelStakesL0(0x55e038ED52627A676a42063e9b2f0b44BDF43F6d);
+        // proxy = new ERC1967Proxy(address(duelStakesL0), init);
 
-        DuelStakesL0(address(proxy)).changeDuelCreator(owner, true);
-        DuelStakesL0(address(proxy)).changeEId(chainDepositModule, DST_EID);
-        DuelStakesL0(address(proxy)).changeOptions(
-            RELEASE_DUEL_GUARANTEED,
-            100000,
-            0
-        );
-        DuelStakesL0(address(proxy)).setPeer(
-            DST_EID,
-            bytes32(uint256(uint160(DepositModule)))
-        );
+        // duelStakesL0.changeDuelCreator(owner, true);
+        duelStakesL0.changeEId(chainDepositModule, DST_EID);
+        // duelStakesL0.changeOptions(RELEASE_DUEL_GUARANTEED, 100000, 0);
+        duelStakesL0.setPeer(DST_EID, bytes32(uint256(uint160(DepositModule))));
 
         vm.stopBroadcast();
 

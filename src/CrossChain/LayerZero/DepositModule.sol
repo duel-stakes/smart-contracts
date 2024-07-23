@@ -285,7 +285,7 @@ contract DepositModule is CoreModule {
             _duel._opt,
             _duel._amount,
             ///@follow-up remember to remove the block.chainid + 1
-            block.chainid + 1,
+            block.chainid,
             msg.sender
         );
 
@@ -313,7 +313,7 @@ contract DepositModule is CoreModule {
             _duel._opt,
             _duel._amount,
             ///@follow-up remember to remove the block.chainid + 1
-            block.chainid + 1,
+            block.chainid,
             msg.sender
         );
 
@@ -349,7 +349,7 @@ contract DepositModule is CoreModule {
             CREATE_DUEL_SELECTOR,
             _newDuel,
             ///@follow-up remember to remove the block.chainid + 1
-            block.chainid + 1,
+            block.chainid,
             msg.sender
         );
 

@@ -18,8 +18,25 @@ contract UpgradeDepositModule is Script {
     function run() public {
         config = new HelperConfig();
 
-        (address owner, , , , , address endpoint, uint256 key, ) = config
-            .activeNetworkConfig();
+        (
+            address owner,
+            address paymentToken,
+            address treasuryAccount,
+            address operationManager,
+            bool payInLzToken,
+            address endpoint,
+            uint256 key,
+
+        ) = config.activeNetworkConfig();
+
+        bytes memory init = abi.encodeWithSelector(
+            DuelStakesL0.initialize.selector,
+            paymentToken,
+            treasuryAccount,
+            operationManager,
+            owner,
+            payInLzToken
+        );
 
         vm.startBroadcast(key);
 

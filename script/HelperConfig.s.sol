@@ -68,6 +68,7 @@ contract HelperConfig is Script {
             block.chainid == 137 || // Polygon - mainnet
             block.chainid == 80_002 || // Amoy - testnet
             block.chainid == 1287 || // Moonbase - testnet
+            block.chainid == 1284 || // Moonbeam - mainnet
             block.chainid == 59_140 || //linea - testnet
             block.chainid == 88882 // Chilliz
         ) {
@@ -88,12 +89,12 @@ contract HelperConfig is Script {
     function getPublicConfig() public view returns (NetworkConfig memory) {
         return
             NetworkConfig({
-                owner: address(0),
-                paymentToken: address(0),
-                treasuryAccount: address(0),
-                operationManager: address(0),
+                owner: 0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a,
+                paymentToken: 0xc2132D05D31c914a87C6611C10748AEb04B58e8F,
+                treasuryAccount: 0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a,
+                operationManager: 0x36657503e2bF76A239669Fbe5ca6FF200C8db376,
                 payInLzToken: false,
-                endpoint: address(0),
+                endpoint: 0x1a44076050125825900e736c501f859c50fE728c,
                 key: vm.envUint("PRIVATE_KEY"),
                 isAnvil: false
             });
