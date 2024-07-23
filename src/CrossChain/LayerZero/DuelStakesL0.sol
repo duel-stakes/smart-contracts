@@ -5,7 +5,7 @@ import {CoreModule, Origin, MessagingFee} from "./CoreModule.sol";
 
 ///@author Waiandt.eth
 
-contract duelStakesL0 is CoreModule {
+contract DuelStakesL0 is CoreModule {
     using OptionsBuilder for bytes;
     //----------------------------------------------------------------------------------------------------
     //                                               STORAGE

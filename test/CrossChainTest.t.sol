@@ -3,7 +3,7 @@ pragma solidity ^0.8.2;
 
 import {Test, console} from "forge-std/Test.sol";
 import {DepositModule, MessagingFee} from "../src/CrossChain/LayerZero/DepositModule.sol";
-import {duelStakesL0} from "../src/CrossChain/LayerZero/DuelStakesL0.sol";
+import {DuelStakesL0} from "../src/CrossChain/LayerZero/DuelStakesL0.sol";
 import {CoreModule} from "../src/CrossChain/LayerZero/CoreModule.sol";
 import {EndpointV2Mock} from "@layerzerolabs/devtools/packages/test-devtools-evm-hardhat/contracts/mocks/EndpointV2Mock.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
@@ -13,7 +13,7 @@ contract CrossChainTest is Test {
     using OptionsBuilder for bytes;
 
     DepositModule public deposit;
-    duelStakesL0 public receiver;
+    DuelStakesL0 public receiver;
 
     mockERC20 public dummyToken;
 
@@ -49,7 +49,7 @@ contract CrossChainTest is Test {
             257000,
             false
         );
-        receiver = new duelStakesL0(address(endpointB), owner);
+        receiver = new DuelStakesL0(address(endpointB), owner);
         receiver.initialize(
             address(dummyToken),
             _treasuryAccount,
@@ -109,7 +109,7 @@ contract CrossChainTest is Test {
         dummyToken.approve(address(deposit), amount);
 
         vm.expectEmit(true, true, false, true, address(receiver));
-        emit duelStakesL0.duelBet(
+        emit DuelStakesL0.duelBet(
             user,
             newBet._amount,
             CoreModule.pickOpts(uint8(newBet._opt)),
@@ -167,7 +167,7 @@ contract CrossChainTest is Test {
         dummyToken.approve(address(deposit), amount);
 
         vm.expectEmit(true, true, false, true, address(receiver));
-        emit duelStakesL0.duelBet(
+        emit DuelStakesL0.duelBet(
             user,
             newBet._amount,
             CoreModule.pickOpts(uint8(newBet._opt)),
@@ -222,7 +222,7 @@ contract CrossChainTest is Test {
         dummyToken.approve(address(receiver), amount);
 
         vm.expectEmit(true, true, false, true, address(receiver));
-        emit duelStakesL0.duelBet(
+        emit DuelStakesL0.duelBet(
             user,
             newBet._amount,
             CoreModule.pickOpts(uint8(newBet._opt)),
@@ -283,7 +283,7 @@ contract CrossChainTest is Test {
         dummyToken.approve(address(receiver), amount);
 
         vm.expectEmit(true, true, false, true, address(receiver));
-        emit duelStakesL0.duelBet(
+        emit DuelStakesL0.duelBet(
             user,
             newBet._amount,
             CoreModule.pickOpts(uint8(newBet._opt)),
@@ -348,7 +348,7 @@ contract CrossChainTest is Test {
         dummyToken.approve(address(receiver), amount);
         // console.log(fee.nativeFee);
         vm.expectEmit(true, true, false, true, address(receiver));
-        emit duelStakesL0.duelBet(
+        emit DuelStakesL0.duelBet(
             user,
             newBet._amount,
             CoreModule.pickOpts(uint8(newBet._opt)),
@@ -409,7 +409,7 @@ contract CrossChainTest is Test {
         dummyToken.approve(address(receiver), amount);
 
         vm.expectEmit(true, true, false, true, address(receiver));
-        emit duelStakesL0.duelBet(
+        emit DuelStakesL0.duelBet(
             user,
             newBet._amount,
             CoreModule.pickOpts(uint8(newBet._opt)),
@@ -475,7 +475,7 @@ contract CrossChainTest is Test {
         dummyToken.approve(address(deposit), amount);
 
         vm.expectEmit(true, true, false, true, address(receiver));
-        emit duelStakesL0.duelBet(
+        emit DuelStakesL0.duelBet(
             user,
             newBet._amount,
             CoreModule.pickOpts(uint8(newBet._opt)),
@@ -548,7 +548,7 @@ contract CrossChainTest is Test {
         dummyToken.approve(address(deposit), amount);
 
         vm.expectEmit(true, true, false, true, address(receiver));
-        emit duelStakesL0.duelBet(
+        emit DuelStakesL0.duelBet(
             user,
             newBet._amount,
             CoreModule.pickOpts(uint8(newBet._opt)),
@@ -622,7 +622,7 @@ contract CrossChainTest is Test {
         dummyToken.approve(address(deposit), amount);
 
         vm.expectEmit(true, true, false, true, address(receiver));
-        emit duelStakesL0.duelBet(
+        emit DuelStakesL0.duelBet(
             user,
             newBet._amount,
             CoreModule.pickOpts(uint8(newBet._opt)),
