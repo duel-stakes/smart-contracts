@@ -130,7 +130,6 @@ contract DepositModule is CoreModule {
     //----------------------------------------------------------------------------------------------------
     //                                               MANAGEMENT
     //----------------------------------------------------------------------------------------------------
-    //@note create withdrawLiquidity for the liquidityRouter
     function changeEId(uint32 _eId) public onlyOwner {
         dstEid = _eId;
         emit changedEId(block.chainid, _eId);
@@ -285,6 +284,7 @@ contract DepositModule is CoreModule {
             _id,
             _duel._opt,
             _duel._amount,
+            ///@follow-up remember to remove the block.chainid + 1
             block.chainid + 1,
             msg.sender
         );
@@ -312,6 +312,7 @@ contract DepositModule is CoreModule {
             _id,
             _duel._opt,
             _duel._amount,
+            ///@follow-up remember to remove the block.chainid + 1
             block.chainid + 1,
             msg.sender
         );
@@ -347,6 +348,7 @@ contract DepositModule is CoreModule {
         bytes memory _payload = abi.encode(
             CREATE_DUEL_SELECTOR,
             _newDuel,
+            ///@follow-up remember to remove the block.chainid + 1
             block.chainid + 1,
             msg.sender
         );
