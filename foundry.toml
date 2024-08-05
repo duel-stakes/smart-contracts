@@ -28,6 +28,7 @@ ethereum-sepolia = { key = "${ETHERSCAN_API_KEY}", url = "https://api-sepolia.et
 optimism-mainnet = { key = "${OPTIMISM_API_KEY}", url = "https://api-optimistic.etherscan.io/api" }
 moonbase = { key = "${MOONBEAM_API_KEY}", url = "https://api-moonbase.moonscan.io/api" }
 moonbeam = { key = "${MOONBEAM_API_KEY}", url = "https://api-moonbeam.moonscan.io/api" }
+arbitrum = { key = "${ARBITRUM_API_KEY}", url = "https://api.arbiscan.io/api" }
 
 [rpc_endpoints]
 mainnet = "${ALCHEMY_MAINNET_URL}"
@@ -38,5 +39,6 @@ sepolia = "${ALCHEMY_SEPOLIA_URL}"
 optimism = "${ALCHEMY_OPTIMISM_URL}"
 moonbase = "https://rpc.api.moonbase.moonbeam.network"
 moonbeam = "https://rpc.api.moonbeam.network"
+arbitrum = "${ALCHEMY_ARBITRUM_URL}"
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config

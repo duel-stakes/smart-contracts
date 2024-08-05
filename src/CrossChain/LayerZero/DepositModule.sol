@@ -108,7 +108,7 @@ contract DepositModule is CoreModule {
         uint32 _dstEid,
         uint128 _lzGasLimit,
         bool _payInLzToken
-    ) external reinitializer(uint64(1)) {
+    ) external reinitializer(uint64(7)) {
         __core_init(
             _owner,
             __paymentToken,
@@ -133,6 +133,20 @@ contract DepositModule is CoreModule {
     function changeEId(uint32 _eId) public onlyOwner {
         dstEid = _eId;
         emit changedEId(block.chainid, _eId);
+    }
+
+    function changeOptions(uint128 gas, uint128 value) public onlyOwner {
+        options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(
+            gas,
+            value
+        );
+    }
+
+    function changeOptions2(uint128 gas, uint128 value) public onlyOwner {
+        options2 = OptionsBuilder.newOptions().addExecutorLzReceiveOption(
+            gas,
+            value
+        );
     }
 
     //----------------------------------------------------------------------------------------------------
@@ -239,7 +253,7 @@ contract DepositModule is CoreModule {
         uint8 opt,
         uint256 multiplier,
         uint256 totalPrizePool
-    ) external onlyOwner returns (bool) {
+    ) external ownerOrRouter returns (bool) {
         if (duels[id].releaseReward != pickOpts(0))
             revert duelAlreadyReleased();
         if (duels[id].multiplier != 0) revert duelAlreadyReleased();
@@ -341,8 +355,10 @@ contract DepositModule is CoreModule {
             _newDuel.initialPrizePool >= 100 || _newDuel.initialPrizePool == 0,
             "Due to underflow you cannot set units less than 100"
         );
-        _checkAmount(_newDuel.initialPrizePool);
-        _transferAmount(_newDuel.initialPrizePool);
+        if (_newDuel.initialPrizePool != 0) {
+            _checkAmount(_newDuel.initialPrizePool);
+            _transferAmount(_newDuel.initialPrizePool);
+        }
         _populateDuel(_newDuel);
 
         bytes memory _payload = abi.encode(

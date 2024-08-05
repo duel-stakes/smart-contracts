@@ -70,7 +70,8 @@ contract HelperConfig is Script {
             block.chainid == 1287 || // Moonbase - testnet
             block.chainid == 1284 || // Moonbeam - mainnet
             block.chainid == 59_140 || //linea - testnet
-            block.chainid == 88882 // Chilliz
+            block.chainid == 88882 || // Chilliz
+            block.chainid == 42161 // Arbitrum - mainnet
         ) {
             activeNetworkConfig = getPublicConfig();
         } else {
@@ -86,7 +87,38 @@ contract HelperConfig is Script {
      * @notice Sets configurations for public networks.
      * @return {NetworkConfig} object.
      */
+    // function getPublicConfig() public view returns (NetworkConfig memory) {
+    //     //moonbeam
+    //     return
+    //         NetworkConfig({
+    //             owner: 0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a,
+    //             paymentToken: 0xFFFFFFfFea09FB06d082fd1275CD48b191cbCD1d,
+    //             treasuryAccount: 0x76Ba2605bD6C5496ff041201880dF1A5dC12F4CC,
+    //             operationManager: 0x36657503e2bF76A239669Fbe5ca6FF200C8db376,
+    //             payInLzToken: false,
+    //             endpoint: 0x1a44076050125825900e736c501f859c50fE728c,
+    //             key: vm.envUint("PRIVATE_KEY"),
+    //             isAnvil: false
+    //         });
+    // }
+
+    // function getPublicConfig() public view returns (NetworkConfig memory) {
+    //     //arbitrum
+    //     return
+    //         NetworkConfig({
+    //             owner: 0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a,
+    //             paymentToken: 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9,
+    //             treasuryAccount: 0x36657503e2bF76A239669Fbe5ca6FF200C8db376,
+    //             operationManager: 0x36657503e2bF76A239669Fbe5ca6FF200C8db376,
+    //             payInLzToken: false,
+    //             endpoint: 0x1a44076050125825900e736c501f859c50fE728c,
+    //             key: vm.envUint("PRIVATE_KEY"),
+    //             isAnvil: false
+    //         });
+    // }
+
     function getPublicConfig() public view returns (NetworkConfig memory) {
+        //polygon
         return
             NetworkConfig({
                 owner: 0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a,

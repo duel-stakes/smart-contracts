@@ -6,10 +6,10 @@ import {HelperConfig} from "./HelperConfig.s.sol";
 import {DuelStakesL0} from "../src/CrossChain/LayerZero/DuelStakesL0.sol";
 import {UUPSUpgradeable} from "lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol";
 
-contract UpgradeDepositModule is Script {
+contract UpgradeL0Module is Script {
     HelperConfig public config;
     DuelStakesL0 public duelStakesL0;
-    address public proxyAddr;
+    address public proxyAddr = 0xf0db811f8EdfFC9dBe0ef99fBBafAAcf6Df7E3F0;
 
     // SET THESE VALUES
     uint32 public DST_EID;
@@ -43,7 +43,7 @@ contract UpgradeDepositModule is Script {
         duelStakesL0 = new DuelStakesL0(endpoint, owner);
         UUPSUpgradeable(payable(proxyAddr)).upgradeToAndCall(
             address(duelStakesL0),
-            ""
+            init
         );
 
         vm.stopBroadcast();

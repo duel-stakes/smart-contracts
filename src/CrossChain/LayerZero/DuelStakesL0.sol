@@ -112,7 +112,7 @@ contract DuelStakesL0 is CoreModule {
         address __operationManager,
         address _owner,
         bool _payInLzToken
-    ) external reinitializer(uint64(1)) {
+    ) external reinitializer(uint64(8)) {
         __core_init(
             _owner,
             __paymentToken,
@@ -163,8 +163,10 @@ contract DuelStakesL0 is CoreModule {
             _newDuel.initialPrizePool >= 100 || _newDuel.initialPrizePool == 0,
             "Due to underflow you cannot set units less than 100"
         );
-        _checkAmount(_newDuel.initialPrizePool);
-        _transferAmount(_newDuel.initialPrizePool);
+        if (_newDuel.initialPrizePool != 0) {
+            _checkAmount(_newDuel.initialPrizePool);
+            _transferAmount(_newDuel.initialPrizePool);
+        }
 
         _populateDuel(_newDuel, block.chainid);
         emit duelCreated(
@@ -235,7 +237,7 @@ contract DuelStakesL0 is CoreModule {
         string calldata _title,
         uint256 _eventDate,
         pickOpts _winner
-    ) public payable onlyOwner {
+    ) public payable ownerOrRouter {
         betDuel storage _aux = _checkDuelExistence(_title, _eventDate);
         require(
             _aux.eventTimestamp <= block.timestamp,
@@ -271,7 +273,7 @@ contract DuelStakesL0 is CoreModule {
             _title,
             _eventDate,
             _winner,
-            block.chainid,
+            _aux.chainId,
             _aux.totalPrizePool
         );
     }

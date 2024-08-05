@@ -103,6 +103,7 @@ abstract contract CoreModule is OApp, UUPSUpgradeable, Initializable {
     error duelIsBlocked();
     error pickNotAvailable();
     error NotRouterOperator(address sender);
+    error senderNotOwnerNorOperator();
 
     //----------------------------------------------------------------------------------------------------
     //                                               EVENTS
@@ -139,6 +140,11 @@ abstract contract CoreModule is OApp, UUPSUpgradeable, Initializable {
 
     modifier onlyCreator() {
         if (!duelCreators[msg.sender]) revert notAllowedCreator();
+        _;
+    }
+    modifier ownerOrRouter() {
+        if (msg.sender != owner() && msg.sender != routerOperator)
+            revert senderNotOwnerNorOperator();
         _;
     }
 
@@ -293,17 +299,20 @@ abstract contract CoreModule is OApp, UUPSUpgradeable, Initializable {
     function route(
         address target,
         uint256 amount,
+        uint256 msgValue,
         bytes calldata data
     ) external payable returns (bool) {
-        if (msg.sender != routerOperator || msg.sender != owner())
+        if (msg.sender != routerOperator && msg.sender != owner())
             revert NotRouterOperator(msg.sender);
-
-        require(
-            _paymentToken.approve(target, amount),
-            "Deposit module: approve didn't go through"
-        );
-        (bool success, ) = payable(target).call{value: msg.value}(data);
-        return success;
+        if (_paymentToken.allowance(address(this), target) < amount)
+            _paymentToken.approve(target, amount);
+        if (msgValue == 0) {
+            (bool success, ) = payable(target).call{value: msg.value}(data);
+            return success;
+        } else {
+            (bool success, ) = payable(target).call{value: msgValue}(data);
+            return success;
+        }
     }
 
     //----------------------------------------------------------------------------------------------------
@@ -311,7 +320,7 @@ abstract contract CoreModule is OApp, UUPSUpgradeable, Initializable {
     //----------------------------------------------------------------------------------------------------
 
     function changeRouterOperator(address newRouter) external returns (bool) {
-        if (msg.sender != routerOperator || msg.sender == owner())
+        if (msg.sender != routerOperator && msg.sender != owner())
             revert NotRouterOperator(msg.sender);
         routerOperator = newRouter;
         return true;
