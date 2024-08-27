@@ -68,18 +68,6 @@ contract Quota {
         uint256 gasLimit;
     }
 
-    /**
-     * @dev Return values of the quota functions.
-     * @param value1: first returned value in the quota function.
-     * `nativeFee` for Layer 0; `gasEstimate` for Axelar; `nativePriceQuote` for Wormhole;
-     * @param value2: second returned value in the quota function.
-     * `lzTokenFee` for Layer 0; 0 for Axelar (no second value); `targetChainRefundPerGasUnused` for Wormhole;
-     */
-    struct QuotaReturns {
-        uint256 value1;
-        uint256 value2;
-    }
-
     /// @dev supported GMP services.
     enum GMPService {
         LAYER_ZERO,
@@ -120,20 +108,22 @@ contract Quota {
     /// -----------------------------------------------------------------------
 
     /**
-     * @notice Retrives quota for cross chain messaging service.
+     * @notice Retrieves quota for cross chain messaging service.
      * @param router: GMP service specifier;
      * @param layer0Args: input arguments for Layer 0 call;
      * @param axelarArgs: input arguments for Axelar call;
      * @param wormholeArgs: input arguments for Wormhole call;
-     * @return returnedValues (uint256,uint256) struct for the returned values
-     * as specified in {QuotaReturns} struct natspec.
+     * @return value1 first returned value.
+     * `nativeFee` for Layer 0; `gasEstimate` for Axelar; `nativePriceQuote` for Wormhole;
+     * @return value2 second returned value.
+     * `lzTokenFee` for Layer 0; 0 for Axelar (no second value); `targetChainRefundPerGasUnused` for Wormhole;
      */
     function quote(
         GMPService router,
         Layer0Args calldata layer0Args,
         AxelarArgs calldata axelarArgs,
         WormholeArgs calldata wormholeArgs
-    ) external view returns (QuotaReturns memory returnedValues) {
+    ) external view returns (uint256 value1, uint256 value2) {
         if (router == GMPService.LAYER_ZERO) {
             MessagingFee memory fee = l0Endpoint.quote(
                 MessagingParams(
@@ -146,10 +136,10 @@ contract Quota {
                 address(this) // @follow-up address(this) or msg.sender ?
             );
 
-            returnedValues.value1 = fee.nativeFee;
-            returnedValues.value2 = fee.lzTokenFee;
+            value1 = fee.nativeFee;
+            value2 = fee.lzTokenFee;
         } else if (router == GMPService.AXELAR) {
-            returnedValues.value1 = axelarEndpoint.estimateGasFee(
+            value1 = axelarEndpoint.estimateGasFee(
                 axelarArgs.destinationChain,
                 axelarArgs.destinationAddress,
                 axelarArgs.payload,
@@ -157,12 +147,11 @@ contract Quota {
                 axelarArgs.params
             );
         } else if (router == GMPService.WORMHOLE) {
-            (returnedValues.value1, returnedValues.value2) = wormholeEndpoint
-                .quoteEVMDeliveryPrice(
-                    wormholeArgs.targetChain,
-                    wormholeArgs.receiverValue,
-                    wormholeArgs.gasLimit
-                );
+            (value1, value2) = wormholeEndpoint.quoteEVMDeliveryPrice(
+                wormholeArgs.targetChain,
+                wormholeArgs.receiverValue,
+                wormholeArgs.gasLimit
+            );
         }
     }
 }
