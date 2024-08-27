@@ -102,28 +102,13 @@ contract HelperConfig is Script {
     //         });
     // }
 
-    // function getPublicConfig() public view returns (NetworkConfig memory) {
-    //     //arbitrum
-    //     return
-    //         NetworkConfig({
-    //             owner: 0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a,
-    //             paymentToken: 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9,
-    //             treasuryAccount: 0x36657503e2bF76A239669Fbe5ca6FF200C8db376,
-    //             operationManager: 0x36657503e2bF76A239669Fbe5ca6FF200C8db376,
-    //             payInLzToken: false,
-    //             endpoint: 0x1a44076050125825900e736c501f859c50fE728c,
-    //             key: vm.envUint("PRIVATE_KEY"),
-    //             isAnvil: false
-    //         });
-    // }
-
     function getPublicConfig() public view returns (NetworkConfig memory) {
-        //polygon
+        //arbitrum
         return
             NetworkConfig({
                 owner: 0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a,
-                paymentToken: 0xc2132D05D31c914a87C6611C10748AEb04B58e8F,
-                treasuryAccount: 0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a,
+                paymentToken: 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9,
+                treasuryAccount: 0x36657503e2bF76A239669Fbe5ca6FF200C8db376,
                 operationManager: 0x36657503e2bF76A239669Fbe5ca6FF200C8db376,
                 payInLzToken: false,
                 endpoint: 0x1a44076050125825900e736c501f859c50fE728c,
@@ -131,6 +116,21 @@ contract HelperConfig is Script {
                 isAnvil: false
             });
     }
+
+    // function getPublicConfig() public view returns (NetworkConfig memory) {
+    //     //polygon
+    //     return
+    //         NetworkConfig({
+    //             owner: 0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a,
+    //             paymentToken: 0xc2132D05D31c914a87C6611C10748AEb04B58e8F,
+    //             treasuryAccount: 0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a,
+    //             operationManager: 0x36657503e2bF76A239669Fbe5ca6FF200C8db376,
+    //             payInLzToken: false,
+    //             endpoint: 0x1a44076050125825900e736c501f859c50fE728c,
+    //             key: vm.envUint("PRIVATE_KEY"),
+    //             isAnvil: false
+    //         });
+    // }
 
     /**
      * @notice Sets configurations for Anvil network.

@@ -10,9 +10,11 @@ import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.so
 contract NewDuelDM is Script {
     HelperConfig public config;
     DepositModule public depositModule =
-        DepositModule(0xb89E0186aE46b433b3BB08A570dC437A277453E7);
+        // DepositModule(0xb89E0186aE46b433b3BB08A570dC437A277453E7);
+        DepositModule(0xe768f5A5F9dDB3cFc6Fdca242C8437d7306a11A8);
 
-    IERC20 public payment = IERC20(0xc2132D05D31c914a87C6611C10748AEb04B58e8F);
+    // IERC20 public payment = IERC20(0xc2132D05D31c914a87C6611C10748AEb04B58e8F);
+    IERC20 public payment = IERC20(0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9);
     address public owner = 0xa4563Cc4619191bE18C3A01Cc50D37EB456d102a;
 
     function run() public {
