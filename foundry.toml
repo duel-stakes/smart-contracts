@@ -17,6 +17,8 @@ remappings = [
     "@upgradeable/=lib/openzeppelin-contracts-upgradeable/",
     "forge-std/=lib/forge-std/src/",
     "solidity-bytes-utils/contracts/=lib/solidity-bytes-utils/contracts/",
+    "@axelar/=lib/axelar-gmp-sdk-solidity/contracts/",
+    "@wormhole/=lib/wormhole-solidity-sdk/src/",
 ]
 
 
