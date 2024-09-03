@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.2;
-import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
-import {CoreModule, Origin, MessagingFee} from "./CoreModule.sol";
+import {CoreModule} from "./CoreModule.sol";
+
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 ///@author Waiandt.eth
 
 contract DuelStakesL0 is CoreModule {
-    using OptionsBuilder for bytes;
     //----------------------------------------------------------------------------------------------------
     //                                               STORAGE
     //----------------------------------------------------------------------------------------------------
@@ -19,7 +19,7 @@ contract DuelStakesL0 is CoreModule {
     //----------------------------------------------------------------------------------------------------
     //                                        CROSSCHAIN VARIABLES
     //----------------------------------------------------------------------------------------------------
-    mapping(uint256 chainId => uint32 eId) public eIds;
+    mapping(uint256 chainId => address module) public modules;
     mapping(bytes4 selector => bytes option) public options;
 
     //----------------------------------------------------------------------------------------------------
@@ -36,11 +36,11 @@ contract DuelStakesL0 is CoreModule {
         uint128 deadlineTimestamp;
         uint256 chainId;
         mapping(uint256 chainId => address) duelCreator;
-        uint256 totalPrizePool;
+        uint256 totalPrizePool; //opt 0 -> totalPrizePool - opt1 - opt2 - opt3 + unclaimedPrizePool == garantido
         uint256 opt1PrizePool;
         uint256 opt2PrizePool;
         uint256 opt3PrizePool;
-        uint256 unclaimedPrizePool;
+        uint256 unclaimedPrizePool; //garantido quando bet em andamento && nao claimed quando bet fechada
         mapping(address => bool) userClaimed; //math to do is total pooled on (pooledAmount/winner)*totalprizepool = (pooledAmount*totalprizepool/winner)
         mapping(address => mapping(uint256 chainId => deposit)) userDeposits;
     }
@@ -102,30 +102,32 @@ contract DuelStakesL0 is CoreModule {
     //----------------------------------------------------------------------------------------------------
 
     constructor(
-        address _endpoint,
+        address _glacisRouter,
+        uint256 _quorum,
         address _owner
-    ) CoreModule(_endpoint, _owner) {}
+    ) CoreModule(_glacisRouter, _quorum, _owner) Ownable(_owner) {}
 
     function initialize(
         address __paymentToken,
         address __treasuryAccount,
         address __operationManager,
         address _owner,
-        bool _payInLzToken
+        address __mainAdapter
     ) external reinitializer(uint64(8)) {
         __core_init(
             _owner,
             __paymentToken,
             __treasuryAccount,
-            __operationManager
+            __operationManager,
+            __mainAdapter
         );
-        payInLzToken = _payInLzToken;
     }
 
     //----------------------------------------------------------------------------------------------------
     //                                           DUELS EMERGENCY PROTOCOL
     //----------------------------------------------------------------------------------------------------
-
+    //@note CREATE A CANCEL BET
+    //@note CREATE A MODIFY TIMESTAMP
     function emergencyWithdraw(
         string calldata _title,
         uint256 _eventDate
@@ -149,6 +151,7 @@ contract DuelStakesL0 is CoreModule {
     //                                               DUELS CREATION
     //----------------------------------------------------------------------------------------------------
 
+    //@note create a no Draw option
     function createDuel(
         CoreModule.CreateDuelInput calldata _newDuel
     ) public onlyCreator whenNotPaused {
@@ -298,19 +301,15 @@ contract DuelStakesL0 is CoreModule {
     //                                         MANAGEMENT SETTER FUNCTIONS
     //----------------------------------------------------------------------------------------------------
 
-    function changeEId(uint256 _chain, uint32 _eId) public onlyOwner {
-        eIds[_chain] = _eId;
-        emit changedEId(_chain, _eId);
-    }
-
-    function changeOptions(
-        bytes4 _selector,
-        uint128 _lzGasLimit,
-        uint128 _value
-    ) public onlyOwner {
-        options[_selector] = OptionsBuilder
-            .newOptions()
-            .addExecutorLzReceiveOption(_lzGasLimit, _value);
+    function changeModule(uint256 _chain, address _module) public onlyOwner {
+        modules[_chain] = _module;
+        GlacisRoute memory allowedRoute = GlacisRoute({
+            fromChainId: _chain,
+            fromAddress: bytes32(bytes20(uint160(_module))),
+            fromAdapter: address(WILDCARD)
+        });
+        _addAllowedRoute(allowedRoute);
+        emit changedModule(_chain, _module);
     }
 
     //----------------------------------------------------------------------------------------------------
@@ -445,6 +444,9 @@ contract DuelStakesL0 is CoreModule {
         _aux.eventTimestamp = uint128(_newDuel.eventTimestamp);
         _aux.unclaimedPrizePool = _newDuel.initialPrizePool;
         _aux.chainId = _chainId;
+        if (!_newDuel.drawAvaliable) {
+            _aux.opt2PrizePool = type(uint256).max;
+        }
     }
 
     function _transferUserAmount(uint256 _amount) internal {
@@ -464,6 +466,8 @@ contract DuelStakesL0 is CoreModule {
             _duel.opt1PrizePool += _amount;
             _duel.userDeposits[sender][chainId]._amountOp1 += _amount;
         } else if (_pick == pickOpts.opt2) {
+            if (_duel.opt2PrizePool == type(uint256).max)
+                revert DrawNotAvailable();
             _duel.totalPrizePool += _amount;
             _duel.opt2PrizePool += _amount;
             _duel.userDeposits[sender][chainId]._amountOp2 += _amount;
@@ -535,16 +539,19 @@ contract DuelStakesL0 is CoreModule {
     }
 
     //----------------------------------------------------------------------------------------------------
-    //                                             L0 FUNCTIONS
+    //                                         CROSSCHAIN FUNCTIONS
     //----------------------------------------------------------------------------------------------------
-    function _lzReceive(
-        Origin calldata /*_origin*/,
-        bytes32 /* _guid */,
-        bytes calldata payload,
-        address, // Executor address as specified by the OApp.
-        bytes calldata // Any extra data or options to trigger on receipt.
+    function _receiveMessage(
+        address[] memory /*fromAdapters*/,
+        uint256 /*fromChainId*/,
+        bytes32 /*fromAddress*/,
+        bytes memory payload
     ) internal override {
-        if (bytes4(payload[:4]) == BET_ON_DUEL_SELECTOR) {
+        bytes4 funcSelector;
+        assembly {
+            funcSelector := mload(add(payload, 32))
+        }
+        if (funcSelector == BET_ON_DUEL_SELECTOR) {
             (
                 ,
                 bytes32 _id,
@@ -557,7 +564,7 @@ contract DuelStakesL0 is CoreModule {
                     (bytes4, bytes32, pickOpts, uint256, uint256, address)
                 );
             _betOnDuel(_id, _opt, _amount, chainId, _user);
-        } else if (bytes4(payload[:4]) == CREATE_DUEL_SELECTOR) {
+        } else if (funcSelector == CREATE_DUEL_SELECTOR) {
             (
                 ,
                 CoreModule.CreateDuelInput memory _newDuel,
@@ -645,42 +652,25 @@ contract DuelStakesL0 is CoreModule {
         uint256 _amount,
         uint256 _chain
     ) internal whenNotPaused {
-        require(eIds[_chain] != 0, "Cannot release: invalid chain id");
+        require(
+            modules[_chain] != address(0),
+            "Cannot release: invalid chain id"
+        );
         bytes memory _payload = abi.encode(
             RELEASE_DUEL_GUARANTEED,
             _id,
             block.chainid,
             _amount
         );
-        _lzSend(
-            eIds[_chain],
+        bytes32 _hash = _routeSingle(
+            _chain,
+            bytes32(bytes20(uint160(modules[_chain]))),
             _payload,
-            options[RELEASE_DUEL_GUARANTEED],
-            // Fee in native gas and ZRO token.
-            MessagingFee(msg.value, 0),
-            // Refund address in case of failed source message.
-            payable(address(this))
+            mainAdapter,
+            address(this),
+            msg.value
         );
-    }
 
-    function quoteRelease(
-        bytes32 _id,
-        uint256 _chain
-    ) external view returns (MessagingFee memory) {
-        require(eIds[_chain] != 0, "Cannot release: invalid chain id");
-        uint256 _amount = duels[_id].unclaimedPrizePool;
-        bytes memory _message = abi.encode(
-            RELEASE_DUEL_GUARANTEED,
-            _id,
-            block.chainid,
-            _amount
-        );
-        return
-            _quote(
-                eIds[_chain],
-                _message,
-                options[RELEASE_DUEL_GUARANTEED],
-                payInLzToken
-            );
+        emit CrossChainInitiated("releaseGuaranteed", _hash, _chain);
     }
 }

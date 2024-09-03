@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {OApp, Origin, MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/OApp.sol";
+import {GlacisClientOwnable} from "@glacis/client/GlacisClientOwnable.sol";
 import {UUPSUpgradeable, ERC1967Utils} from "lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {Initializable} from "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
-abstract contract CoreModule is OApp, UUPSUpgradeable, Initializable {
+abstract contract CoreModule is
+    GlacisClientOwnable,
+    UUPSUpgradeable,
+    Initializable
+{
     //----------------------------------------------------------------------------------------------------
     //                                               STORAGE
     //----------------------------------------------------------------------------------------------------
@@ -33,8 +36,7 @@ abstract contract CoreModule is OApp, UUPSUpgradeable, Initializable {
     //----------------------------------------------------------------------------------------------------
     //                                        CROSSCHAIN VARIABLES
     //----------------------------------------------------------------------------------------------------
-
-    bool payInLzToken;
+    address mainAdapter;
 
     bytes4 public constant BET_ON_DUEL_SELECTOR =
         bytes4(
@@ -63,6 +65,7 @@ abstract contract CoreModule is OApp, UUPSUpgradeable, Initializable {
         uint256 deadlineTimestamp;
         address duelCreator;
         uint256 initialPrizePool;
+        bool drawAvaliable;
     }
 
     struct betDuelInput {
@@ -105,22 +108,15 @@ abstract contract CoreModule is OApp, UUPSUpgradeable, Initializable {
     error pickNotAvailable();
     error NotRouterOperator(address sender);
     error senderNotOwnerNorOperator();
+    error DrawNotAvailable();
 
     //----------------------------------------------------------------------------------------------------
     //                                               EVENTS
     //----------------------------------------------------------------------------------------------------
     event duelCreatorChanged(address indexed _address, bool indexed _allowed);
 
-    // event claimedBet(
-    //     string _title,
-    //     uint256 indexed _eventDate,
-    //     address indexed _user,
-    //     uint256 indexed _payment,
-    //     pickOpts _winner,
-    //     uint256 _chain
-    // );
-
-    event changedEId(uint256 indexed _chain, uint32 indexed _eId);
+    event changedModule(uint256 indexed _chain, address indexed _module);
+    event changedChain(uint256 indexed _Modulechain, uint256 indexed _dstChain);
     event feeTaken(
         address indexed _operation,
         uint256 indexed _amount,
@@ -133,6 +129,11 @@ abstract contract CoreModule is OApp, UUPSUpgradeable, Initializable {
         address indexed _user,
         uint256 indexed _amount,
         uint256 _chain
+    );
+    event CrossChainInitiated(
+        string _function,
+        bytes32 indexed _hash,
+        uint256 indexed _chain
     );
 
     //----------------------------------------------------------------------------------------------------
@@ -157,17 +158,18 @@ abstract contract CoreModule is OApp, UUPSUpgradeable, Initializable {
     //----------------------------------------------------------------------------------------------------
 
     constructor(
-        address _endpoint,
+        address _glacisRouter,
+        uint256 _quorum,
         address _owner
-    ) OApp(_endpoint, _owner) Ownable(_owner) {}
+    ) GlacisClientOwnable(_glacisRouter, _quorum, _owner) {}
 
     function __core_init(
         address _owner,
         address __paymentToken,
         address __treasuryAccount,
-        address __operationManager
+        address __operationManager,
+        address __mainAdapter
     ) internal {
-        _transferOwnership(_owner);
         paused = false;
         _paymentToken = IERC20(__paymentToken);
         _treasuryAccount = __treasuryAccount;
@@ -175,6 +177,7 @@ abstract contract CoreModule is OApp, UUPSUpgradeable, Initializable {
         routerOperator = _owner;
         duelCreators[msg.sender] = true;
         allowedControllers[msg.sender] = true;
+        mainAdapter = __mainAdapter;
     }
 
     /// -----------------------------------------------------------------------

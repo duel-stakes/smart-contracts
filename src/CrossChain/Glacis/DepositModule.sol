@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
+import {CoreModule} from "./CoreModule.sol";
 
-import {CoreModule, Origin, MessagingFee} from "./CoreModule.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract DepositModule is CoreModule {
-    using OptionsBuilder for bytes;
-
     //----------------------------------------------------------------------------------------------------
     //                                               EVENTS
     //----------------------------------------------------------------------------------------------------
@@ -35,9 +33,10 @@ contract DepositModule is CoreModule {
     //                                        CROSSCHAIN VARIABLES
     //----------------------------------------------------------------------------------------------------
 
-    uint32 public dstEid;
-    bytes options;
-    bytes options2;
+    address public dstModule;
+    uint256 public dstChain;
+    // bytes options;
+    // bytes options2;
 
     //----------------------------------------------------------------------------------------------------
     //                                               STRUCTS
@@ -96,57 +95,50 @@ contract DepositModule is CoreModule {
     //----------------------------------------------------------------------------------------------------
 
     constructor(
-        address _endpoint,
+        address _glacisRouter,
+        uint256 _quorum,
         address _owner
-    ) CoreModule(_endpoint, _owner) {}
+    ) CoreModule(_glacisRouter, _quorum, _owner) Ownable(_owner) {}
 
     function initialize(
         address _owner,
         address __paymentToken,
         address __treasuryAccount,
         address __operationManager,
-        uint32 _dstEid,
-        uint128 _lzGasLimit,
-        bool _payInLzToken
-    ) external reinitializer(uint64(7)) {
+        address __mainAdapter
+    ) external reinitializer(uint64(0)) {
         __core_init(
             _owner,
             __paymentToken,
             __treasuryAccount,
-            __operationManager
+            __operationManager,
+            __mainAdapter
         );
-        options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(
-            _lzGasLimit,
-            0
-        );
-        options2 = OptionsBuilder.newOptions().addExecutorLzReceiveOption(
-            _lzGasLimit,
-            2103608000000000
-        );
-        dstEid = _dstEid;
-        payInLzToken = _payInLzToken;
     }
 
     //----------------------------------------------------------------------------------------------------
     //                                               MANAGEMENT
     //----------------------------------------------------------------------------------------------------
-    function changeEId(uint32 _eId) public onlyOwner {
-        dstEid = _eId;
-        emit changedEId(block.chainid, _eId);
+    function changeModule(address _module) public onlyOwner {
+        dstModule = _module;
+        GlacisRoute memory allowedRoute = GlacisRoute({
+            fromChainId: dstChain,
+            fromAddress: bytes32(bytes20(uint160(_module))),
+            fromAdapter: address(WILDCARD)
+        });
+        _addAllowedRoute(allowedRoute);
+        emit changedModule(block.chainid, _module);
     }
 
-    function changeOptions(uint128 gas, uint128 value) public onlyOwner {
-        options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(
-            gas,
-            value
-        );
-    }
-
-    function changeOptions2(uint128 gas, uint128 value) public onlyOwner {
-        options2 = OptionsBuilder.newOptions().addExecutorLzReceiveOption(
-            gas,
-            value
-        );
+    function changChain(uint256 _dstChain) public onlyOwner {
+        dstChain = _dstChain;
+        GlacisRoute memory allowedRoute = GlacisRoute({
+            fromChainId: _dstChain,
+            fromAddress: bytes32(bytes20(uint160(dstModule))),
+            fromAdapter: address(WILDCARD)
+        });
+        _addAllowedRoute(allowedRoute);
+        emit changedChain(block.chainid, _dstChain);
     }
 
     //----------------------------------------------------------------------------------------------------
@@ -165,6 +157,9 @@ contract DepositModule is CoreModule {
             _duel.userDeposits[sender]._amountOp2 += _amount;
         } else if (_pick == pickOpts.opt3) {
             _duel.userDeposits[sender]._amountOp3 += _amount;
+        } else if (_pick == pickOpts.none) {
+            //@note THIS OPTIONS DOES NOT INTAKE POINTS
+            _duel.guaranteed += _amount;
         } else {
             revert pickNotAvailable();
         }
@@ -303,15 +298,16 @@ contract DepositModule is CoreModule {
             msg.sender
         );
 
-        _lzSend(
-            dstEid,
+        bytes32 _hash = _routeSingle(
+            dstChain,
+            bytes32(bytes20(uint160(dstModule))),
             _payload,
-            options,
-            // Fee in native gas and ZRO token.
-            MessagingFee(msg.value, 0),
-            // Refund address in case of failed source message.
-            payable(msg.sender)
+            mainAdapter,
+            address(this),
+            msg.value
         );
+
+        emit CrossChainInitiated("betOnDuel", _hash, dstChain);
     }
 
     function betOnDuelFull(Bet memory _duel) external payable {
@@ -331,15 +327,16 @@ contract DepositModule is CoreModule {
             msg.sender
         );
 
-        _lzSend(
-            dstEid,
+        bytes32 _hash = _routeSingle(
+            dstChain,
+            bytes32(bytes20(uint160(dstModule))),
             _payload,
-            options2,
-            // Fee in native gas and ZRO token.
-            MessagingFee(msg.value, 0),
-            // Refund address in case of failed source message.
-            payable(msg.sender)
+            mainAdapter,
+            address(this),
+            msg.value
         );
+
+        emit CrossChainInitiated("betOnDuelFull", _hash, dstChain);
     }
 
     function createDuel(
@@ -369,29 +366,33 @@ contract DepositModule is CoreModule {
             msg.sender
         );
 
-        _lzSend(
-            dstEid,
+        bytes32 _hash = _routeSingle(
+            dstChain,
+            bytes32(bytes20(uint160(dstModule))),
             _payload,
-            options,
-            // Fee in native gas and ZRO token.
-            MessagingFee(msg.value, 0),
-            // Refund address in case of failed source message.
-            payable(msg.sender)
+            mainAdapter,
+            address(this),
+            msg.value
         );
+
+        emit CrossChainInitiated("createDuel", _hash, dstChain);
     }
 
     //----------------------------------------------------------------------------------------------------
     //                                               CROSS-CHAIN MESSAGE
     //----------------------------------------------------------------------------------------------------
 
-    function _lzReceive(
-        Origin calldata /* _origin*/,
-        bytes32 /* _guid */,
-        bytes calldata payload,
-        address, // Executor address as specified by the OApp.
-        bytes calldata // Any extra data or options to trigger on receipt.
+    function _receiveMessage(
+        address[] memory /*fromAdapters*/,
+        uint256 /*fromChainId*/,
+        bytes32 /*fromAddress*/,
+        bytes memory payload
     ) internal override {
-        if (bytes4(payload[:4]) == RELEASE_DUEL_GUARANTEED) {
+        bytes4 funcSelector;
+        assembly {
+            funcSelector := mload(add(payload, 32))
+        }
+        if (funcSelector == RELEASE_DUEL_GUARANTEED) {
             (, bytes32 duel /*uint256 chainId*/, , uint256 amount) = abi.decode(
                 payload,
                 (bytes4, bytes32, uint256, uint256)
@@ -404,50 +405,5 @@ contract DepositModule is CoreModule {
                 block.chainid
             );
         }
-    }
-
-    function quoteBet(
-        Bet memory _duel
-    ) external view returns (MessagingFee memory) {
-        bytes32 _id = keccak256(abi.encode(_duel._timestamp, _duel._title));
-        bytes memory _message = abi.encode(
-            BET_ON_DUEL_SELECTOR,
-            _id,
-            _duel._opt,
-            _duel._amount,
-            block.chainid,
-            msg.sender
-        );
-        return _quote(dstEid, _message, options, payInLzToken);
-    }
-
-    function quoteBetFull(
-        Bet memory _duel
-    ) external view returns (MessagingFee memory) {
-        bytes32 _id = keccak256(abi.encode(_duel._timestamp, _duel._title));
-        bytes memory _message = abi.encode(
-            BET_ON_DUEL_SELECTOR,
-            _id,
-            _duel._opt,
-            _duel._amount,
-            block.chainid,
-            msg.sender
-        );
-        return _quote(dstEid, _message, options2, payInLzToken);
-    }
-
-    function quoteNewDuel(
-        CoreModule.CreateDuelInput memory _duel
-    ) external view returns (MessagingFee memory) {
-        // bytes32 _id = keccak256(
-        //     abi.encode(_duel.eventTimestamp, _duel.duelTitle)
-        // );
-        bytes memory _message = abi.encode(
-            CREATE_DUEL_SELECTOR,
-            _duel,
-            block.chainid + 1,
-            msg.sender
-        );
-        return _quote(dstEid, _message, options, payInLzToken);
     }
 }

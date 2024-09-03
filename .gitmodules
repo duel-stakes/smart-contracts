@@ -25,3 +25,6 @@
 [submodule "lib/wormhole-solidity-sdk"]
 	path = lib/wormhole-solidity-sdk
 	url = https://github.com/wormhole-foundation/wormhole-solidity-sdk
+[submodule "lib/v1-core"]
+	path = lib/v1-core
+	url = https://github.com/glacislabs/v1-core

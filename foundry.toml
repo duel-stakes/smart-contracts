@@ -19,6 +19,7 @@ remappings = [
     "solidity-bytes-utils/contracts/=lib/solidity-bytes-utils/contracts/",
     "@axelar/=lib/axelar-gmp-sdk-solidity/contracts/",
     "@wormhole/=lib/wormhole-solidity-sdk/src/",
+    "@glacis/=lib/v1-core/contracts/",
 ]
 
 
