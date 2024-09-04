@@ -14,12 +14,12 @@ import {IWormholeRelayer} from "@wormhole/interfaces/IWormholeRelayer.sol";
 //----------------------------------------------------------------------------------------------------
 
 /**
- * @title Quota
+ * @title Quote
  * @author @EWCunha and @G-Deps
  * @notice Retrieves cross chain communication quota from several GMP services.
  * @dev Supports Layer 0, Axelar, and Wormhole.
  */
-contract Quota {
+contract Quote {
     //----------------------------------------------------------------------------------------------------
     //                                        STRUCTS
     //----------------------------------------------------------------------------------------------------
@@ -27,14 +27,12 @@ contract Quota {
     /**
      * @dev Arguments for Layer 0 quota call
      * @param dstEid: EID of the destination chain;
-     * @param peer: peer address of the calling contract;
      * @param message: payload to be sent;
      * @param options: option settings for the cross chain messaging;
      * @param payInLzToken: whether or not to pay in LZ tokens.
      */
     struct Layer0Args {
         uint32 dstEid;
-        bytes32 peer;
         bytes message;
         bytes options;
         bool payInLzToken;
@@ -83,6 +81,21 @@ contract Quota {
     IAxelarGasService internal axelarEndpoint;
     IWormholeRelayer internal wormholeEndpoint;
 
+    Layer0Args internal L0_ZERO_ARGS =
+        Layer0Args({dstEid: 0, message: "", options: "", payInLzToken: false});
+
+    AxelarArgs internal AXELAR_ZERO_ARGS =
+        AxelarArgs({
+            destinationChain: "",
+            destinationAddress: "",
+            payload: "",
+            executionGasLimit: 0,
+            params: ""
+        });
+
+    WormholeArgs internal WORMHOLE_ZERO_ARGS =
+        WormholeArgs({targetChain: 0, receiverValue: 0, gasLimit: 0});
+
     //----------------------------------------------------------------------------------------------------
     //                                           CONSTRUCTOR
     //----------------------------------------------------------------------------------------------------
@@ -126,13 +139,13 @@ contract Quota {
     ) external view returns (uint256 value1, uint256 value2) {
         if (router == GMPService.LAYER_ZERO) {
             MessagingFee memory fee = l0Endpoint.quote(
-                MessagingParams(
-                    layer0Args.dstEid,
-                    layer0Args.peer,
-                    layer0Args.message,
-                    layer0Args.options,
-                    layer0Args.payInLzToken
-                ),
+                MessagingParams({
+                    dstEid: layer0Args.dstEid,
+                    receiver: bytes32(uint256(uint160(address(this)))), // @follow-up address(this) or msg.sender ?
+                    message: layer0Args.message,
+                    options: layer0Args.options,
+                    payInLzToken: layer0Args.payInLzToken
+                }),
                 address(this) // @follow-up address(this) or msg.sender ?
             );
 
