@@ -54,14 +54,6 @@ contract DepositModule is CoreModule {
         mapping(address => deposit) userDeposits;
     }
 
-    //change this to populate betDuel, choose duel based on the duel title and event timestamp of bytes32 key
-    struct Bet {
-        string _title;
-        uint256 _timestamp;
-        pickOpts _opt;
-        uint256 _amount;
-    }
-
     //----------------------------------------------------------------------------------------------------
     //                                               ERRORS
     //----------------------------------------------------------------------------------------------------

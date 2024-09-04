@@ -5,9 +5,11 @@ pragma solidity ^0.8.20;
 //                                        IMPORTS
 //----------------------------------------------------------------------------------------------------
 
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ILayerZeroEndpointV2, MessagingFee, MessagingParams} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {IAxelarGasService} from "@axelar/interfaces/IAxelarGasService.sol";
 import {IWormholeRelayer} from "@wormhole/interfaces/IWormholeRelayer.sol";
+import {ICommons} from "../../../interface/ICommons.sol";
 
 //----------------------------------------------------------------------------------------------------
 //                                        CONTRACT
@@ -19,7 +21,7 @@ import {IWormholeRelayer} from "@wormhole/interfaces/IWormholeRelayer.sol";
  * @notice Retrieves cross chain communication quota from several GMP services.
  * @dev Supports Layer 0, Axelar, and Wormhole.
  */
-contract Quote {
+contract Quote is ICommons, Ownable {
     //----------------------------------------------------------------------------------------------------
     //                                        STRUCTS
     //----------------------------------------------------------------------------------------------------
@@ -96,6 +98,22 @@ contract Quote {
     WormholeArgs internal WORMHOLE_ZERO_ARGS =
         WormholeArgs({targetChain: 0, receiverValue: 0, gasLimit: 0});
 
+    // Layer0 settings
+    bytes internal options;
+    uint32 internal dstEid;
+    bool internal payInLzToken;
+
+    // Axelar settings
+    string internal destinationChain;
+    string internal destinationAddress;
+    uint256 internal executionGasLimit;
+    bytes internal params;
+
+    // Wormhole settings
+    uint16 internal targetChain;
+    uint256 internal receiverValue;
+    uint256 internal gasLimit;
+
     //----------------------------------------------------------------------------------------------------
     //                                           CONSTRUCTOR
     //----------------------------------------------------------------------------------------------------
@@ -110,14 +128,69 @@ contract Quote {
         address _l0Endpoint,
         address _axelarEndpoint,
         address _wormholeEndpoint
-    ) {
+    ) Ownable(msg.sender) {
         l0Endpoint = ILayerZeroEndpointV2(_l0Endpoint);
         axelarEndpoint = IAxelarGasService(_axelarEndpoint);
         wormholeEndpoint = IWormholeRelayer(_wormholeEndpoint);
     }
 
     /// -----------------------------------------------------------------------
-    /// View external quota functions
+    /// State-change external functions
+    /// -----------------------------------------------------------------------
+
+    /**
+     * @notice Sets Layer0 settings.
+     * @param _options: options for sending cross-chain messages.
+     * @param _dstEid: EID of the destination chain.
+     * @param _payInLzToken: specifies whether to pay in LZ tokens or not.
+     */
+    function setL0Configs(
+        bytes calldata _options,
+        uint32 _dstEid,
+        bool _payInLzToken
+    ) external onlyOwner {
+        options = _options;
+        dstEid = _dstEid;
+        payInLzToken = _payInLzToken;
+    }
+
+    /**
+     * @notice Sets Axelar settings.
+     * @param _destinationChain: destination chain of the cross-chain message.
+     * @param _destinationAddress: destination address of the cross-chain message.
+     * @param _executionGasLimit: gas limit for the cross-chain message esecution.
+     * @param _params: parameters for the cross-chain messaging.
+     */
+    function setAxelarConfigs(
+        string calldata _destinationChain,
+        string calldata _destinationAddress,
+        uint256 _executionGasLimit,
+        bytes calldata _params
+    ) external onlyOwner {
+        destinationChain = _destinationChain;
+        destinationAddress = _destinationAddress;
+        executionGasLimit = _executionGasLimit;
+        params = _params;
+    }
+
+    /**
+     * @notice Sets Wormhole settings.
+     * @param _targetChain: target chain of the cross-chain message.
+     * @param _receiverValue: value to be send with the cross-chain message.
+     * @param _gasLimit: gas limit for the cross-chain message esecution.
+     */
+    function setWormholeConfigs(
+        uint16 _targetChain,
+        uint256 _receiverValue,
+        uint256 _gasLimit
+    ) external onlyOwner {
+        targetChain = _targetChain;
+        receiverValue = _receiverValue;
+        gasLimit = _gasLimit;
+    }
+
+    /// -----------------------------------------------------------------------
+    /// View public/external quota functions
     /// -----------------------------------------------------------------------
 
     /**
@@ -133,20 +206,20 @@ contract Quote {
      */
     function quote(
         GMPService router,
-        Layer0Args calldata layer0Args,
-        AxelarArgs calldata axelarArgs,
-        WormholeArgs calldata wormholeArgs
-    ) external view returns (uint256 value1, uint256 value2) {
+        Layer0Args memory layer0Args,
+        AxelarArgs memory axelarArgs,
+        WormholeArgs memory wormholeArgs
+    ) public view returns (uint256 value1, uint256 value2) {
         if (router == GMPService.LAYER_ZERO) {
             MessagingFee memory fee = l0Endpoint.quote(
                 MessagingParams({
                     dstEid: layer0Args.dstEid,
-                    receiver: bytes32(uint256(uint160(address(this)))), // @follow-up address(this) or msg.sender ?
+                    receiver: bytes32(uint256(uint160(msg.sender))), // @follow-up address(this) or msg.sender ?
                     message: layer0Args.message,
                     options: layer0Args.options,
                     payInLzToken: layer0Args.payInLzToken
                 }),
-                address(this) // @follow-up address(this) or msg.sender ?
+                msg.sender // @follow-up address(this) or msg.sender ?
             );
 
             value1 = fee.nativeFee;
@@ -166,5 +239,152 @@ contract Quote {
                 wormholeArgs.gasLimit
             );
         }
+    }
+
+    /**
+     * @dev Builds and gets quote.
+     * @param router: router choice (Layer0, Axelar, Wormhole).
+     * @param payload: payload to be sent in cross-chain messaging.
+     * @return value1 - uint256 - first returned value.
+     * @return value2 - uint256 - second returned value.
+     */
+    function getQuote(
+        GMPService router,
+        bytes memory payload
+    ) public view returns (uint256 value1, uint256 value2) {
+        Layer0Args memory l0Args;
+        AxelarArgs memory axelarArgs;
+        WormholeArgs memory wormholeArgs;
+
+        if (router == GMPService.LAYER_ZERO) {
+            l0Args = Layer0Args({
+                dstEid: dstEid,
+                message: payload,
+                options: options,
+                payInLzToken: payInLzToken
+            });
+            axelarArgs = AXELAR_ZERO_ARGS;
+            wormholeArgs = WORMHOLE_ZERO_ARGS;
+        } else if (router == GMPService.AXELAR) {
+            l0Args = L0_ZERO_ARGS;
+            axelarArgs = AxelarArgs({
+                destinationChain: destinationChain,
+                destinationAddress: destinationAddress,
+                payload: payload,
+                executionGasLimit: executionGasLimit,
+                params: params
+            });
+            wormholeArgs = WORMHOLE_ZERO_ARGS;
+        } else if (router == GMPService.WORMHOLE) {
+            l0Args = L0_ZERO_ARGS;
+            axelarArgs = AXELAR_ZERO_ARGS;
+            wormholeArgs = WormholeArgs({
+                targetChain: targetChain,
+                receiverValue: receiverValue,
+                gasLimit: gasLimit
+            });
+        }
+
+        return quote(router, l0Args, axelarArgs, wormholeArgs);
+    }
+
+    /**
+     * @notice Quotes a bet duel.
+     * @param router: router choice (Layer0, Axelar, Wormhole).
+     * @param _duel: bet values.
+     * @param creator: creator of the bet.
+     * @return value1 - uint256 - first returned value.
+     * @return value2 - uint256 - second returned value.
+     */
+    function quoteBet(
+        GMPService router,
+        Bet memory _duel,
+        address creator
+    ) external view returns (uint256 value1, uint256 value2) {
+        bytes32 _id = keccak256(abi.encode(_duel._timestamp, _duel._title));
+        bytes memory _message = abi.encode(
+            BET_ON_DUEL_SELECTOR,
+            _id,
+            _duel._opt,
+            _duel._amount,
+            block.chainid,
+            creator
+        );
+
+        return getQuote(router, _message);
+    }
+
+    /**
+     * @notice Quotes a full bet duel.
+     * @param router: router choice (Layer0, Axelar, Wormhole).
+     * @param _duel: bet values.
+     * @param creator: creator of the bet.
+     * @return value1 - uint256 - first returned value.
+     * @return value2 - uint256 - second returned value.
+     */
+    function quoteBetFull(
+        GMPService router,
+        Bet memory _duel,
+        address creator
+    ) external view returns (uint256 value1, uint256 value2) {
+        bytes32 _id = keccak256(abi.encode(_duel._timestamp, _duel._title));
+        bytes memory _message = abi.encode(
+            BET_ON_DUEL_SELECTOR,
+            _id,
+            _duel._opt,
+            _duel._amount,
+            block.chainid,
+            creator
+        );
+        return getQuote(router, _message);
+    }
+
+    /**
+     * @notice Quotes new duel creation.
+     * @param router: router choice (Layer0, Axelar, Wormhole).
+     * @param _duel: create duel input values.
+     * @param creator: creator of the bet.
+     * @return value1 - uint256 - first returned value.
+     * @return value2 - uint256 - second returned value.
+     */
+    function quoteNewDuel(
+        GMPService router,
+        CreateDuelInput memory _duel,
+        address creator
+    ) external view returns (uint256 value1, uint256 value2) {
+        // bytes32 _id = keccak256(
+        //     abi.encode(_duel.eventTimestamp, _duel.duelTitle)
+        // );
+        bytes memory _message = abi.encode(
+            CREATE_DUEL_SELECTOR,
+            _duel,
+            block.chainid,
+            creator
+        );
+        return getQuote(router, _message);
+    }
+
+    /**
+     * @notice Quotes release bet.
+     * @param router: router choice (Layer0, Axelar, Wormhole).
+     * @param _id: ID of the duel.
+     * @param _chain: chainId of the duel.
+     * @param _amount: amount of the release.
+     * @return value1 - uint256 - first returned value.
+     * @return value2 - uint256 - second returned value.
+     */
+    function quoteRelease(
+        GMPService router,
+        bytes32 _id,
+        uint256 _chain,
+        uint256 _amount
+    ) external view returns (uint256 value1, uint256 value2) {
+        bytes memory _message = abi.encode(
+            RELEASE_DUEL_GUARANTEED,
+            _id,
+            _chain,
+            _amount
+        );
+        return getQuote(router, _message);
     }
 }
