@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {CoreModule} from "./CoreModule.sol";
+import {CoreModule, ICommons} from "./CoreModule.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -183,7 +183,7 @@ contract DepositModule is CoreModule {
     ) internal returns (uint256) {
         betDuel storage _aux = duels[keccak256(abi.encode(_eventDate, _title))];
         require(!_aux.userClaimed[msg.sender], "User already claimed");
-        if (_aux.releaseReward == CoreModule.pickOpts.opt1) {
+        if (_aux.releaseReward == ICommons.pickOpts.opt1) {
             require(
                 _aux.userDeposits[msg.sender]._amountOp1 > 0,
                 "No bets done on the winner"
@@ -192,7 +192,7 @@ contract DepositModule is CoreModule {
             return
                 (_aux.userDeposits[msg.sender]._amountOp1 * _aux.multiplier) /
                 1 ether;
-        } else if (_aux.releaseReward == CoreModule.pickOpts.opt2) {
+        } else if (_aux.releaseReward == ICommons.pickOpts.opt2) {
             require(
                 _aux.userDeposits[msg.sender]._amountOp2 > 0,
                 "No bets done on the winner"
@@ -201,7 +201,7 @@ contract DepositModule is CoreModule {
             return
                 (_aux.userDeposits[msg.sender]._amountOp2 * _aux.multiplier) /
                 1 ether;
-        } else if (_aux.releaseReward == CoreModule.pickOpts.opt3) {
+        } else if (_aux.releaseReward == ICommons.pickOpts.opt3) {
             require(
                 _aux.userDeposits[msg.sender]._amountOp3 > 0,
                 "No bets done on the winner"

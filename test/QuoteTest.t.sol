@@ -17,12 +17,13 @@ contract QuoteTest is Test {
     bool public payInLzToken = false;
 
     function setUp() public {
+        vm.createSelectFork(vm.envString("ALCHEMY_SEPOLIA_URL"));
         quote = new Quote(l0Endpoint, address(0), address(0));
 
         quote.setL0Configs(options, dstEid, payInLzToken);
     }
 
-    function setTestQuote() public {
+    function testQuote() public {
         bytes memory message = abi.encode("hello world");
 
         (uint256 val1, uint256 val2) = quote.getQuote(
@@ -31,6 +32,6 @@ contract QuoteTest is Test {
         );
 
         assertTrue(val1 > 0);
-        assertTrue(val2 > 0);
+        assertTrue(val2 == 0);
     }
 }
