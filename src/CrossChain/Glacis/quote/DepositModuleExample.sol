@@ -5,7 +5,7 @@ import {DepositModule} from "../DepositModule.sol";
 import {Quote} from "./Quote.sol";
 
 contract DepositModuleExample is DepositModule, Quote {
-    // set up theses variables:
+    // set up these variables:
     bytes options;
     uint32 dstEid;
     bool payInLzToken;
