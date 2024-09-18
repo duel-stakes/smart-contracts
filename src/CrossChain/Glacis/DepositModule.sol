@@ -50,6 +50,7 @@ contract DepositModule is CoreModule {
         address duelCreator;
         uint256 guaranteed;
         uint256 multiplier;
+        bool drawAvailable;
         mapping(address => bool) userClaimed; //math to do is total pooled on (pooledAmount/winner)*totalprizepool = (pooledAmount*totalprizepool/winner)
         mapping(address => deposit) userDeposits;
     }
@@ -130,7 +131,7 @@ contract DepositModule is CoreModule {
         emit changedModule(block.chainid, _module);
     }
 
-    function changChain(uint256 _dstChain) public onlyOwner {
+    function changeChain(uint256 _dstChain) public onlyOwner {
         dstChain = _dstChain;
         GlacisRoute memory allowedRoute = GlacisRoute({
             fromChainId: _dstChain,
@@ -139,6 +140,40 @@ contract DepositModule is CoreModule {
         });
         _addAllowedRoute(allowedRoute);
         emit changedChain(block.chainid, _dstChain);
+    }
+
+    function cancelDuel(string calldata _title, uint256 _eventDate) public {
+        bytes32 _id = keccak256(abi.encode(_eventDate, _title));
+        if (duels[_id].duelCreator == address(0)) revert eventDoesNotExists();
+
+        if ((msg.sender != owner()) && (msg.sender != duels[_id].duelCreator))
+            revert notDuelManager(msg.sender);
+
+        _releaseGuarateed(_id, duels[_id].guaranteed);
+
+        duels[_id].releaseReward = pickOpts.none;
+        duels[_id].blockedDuel = true;
+        duels[_id].multiplier = 1 ether;
+
+        emit cancelledDuel(_title, _eventDate, block.chainid);
+    }
+
+    function changeTimestamp(
+        string calldata _title,
+        uint256 _eventDate,
+        uint128 _eventTimestamp
+    ) public {
+        bytes32 _id = keccak256(abi.encode(_eventDate, _title));
+        if (duels[_id].duelCreator == address(0)) revert eventDoesNotExists();
+
+        if ((msg.sender != owner()) && (msg.sender != duels[_id].duelCreator))
+            revert notDuelManager(msg.sender);
+
+        duels[_id].eventTimestamp = _eventTimestamp;
+
+        /// @note create a multichain change event timestamp interaction for the data
+
+        emit changedTimestamp(_title, _eventDate, block.chainid, address(this));
     }
 
     //----------------------------------------------------------------------------------------------------
@@ -153,8 +188,10 @@ contract DepositModule is CoreModule {
     ) internal {
         if (_pick == pickOpts.opt1) {
             _duel.userDeposits[sender]._amountOp1 += _amount;
-        } else if (_pick == pickOpts.opt2) {
+        } else if (_pick == pickOpts.opt2 && _duel.drawAvailable) {
             _duel.userDeposits[sender]._amountOp2 += _amount;
+        } else if (_pick == pickOpts.opt2 && !_duel.drawAvailable) {
+            revert DrawNotAvailable();
         } else if (_pick == pickOpts.opt3) {
             _duel.userDeposits[sender]._amountOp3 += _amount;
         } else if (_pick == pickOpts.none) {
@@ -171,7 +208,7 @@ contract DepositModule is CoreModule {
         betDuel storage _aux = duels[
             keccak256(abi.encode(_newDuel.eventTimestamp, _newDuel.duelTitle))
         ];
-        _aux.duelTitle = _newDuel.duelTitle;
+        _aux.drawAvailable = _newDuel.drawAvailable;
         _aux.duelDescription = _newDuel.duelDescription;
         _aux.eventTimestamp = _newDuel.eventTimestamp;
         _aux.guaranteed = _newDuel.initialPrizePool;
@@ -293,7 +330,7 @@ contract DepositModule is CoreModule {
             _id,
             _duel._opt,
             _duel._amount,
-            ///@follow-up remember to remove the block.chainid + 1
+            ///@follow-up test to remove the block.chainid + 1
             block.chainid,
             msg.sender
         );
@@ -322,7 +359,7 @@ contract DepositModule is CoreModule {
             _id,
             _duel._opt,
             _duel._amount,
-            ///@follow-up remember to remove the block.chainid + 1
+            ///@follow-up test to remove the block.chainid + 1
             block.chainid,
             msg.sender
         );
@@ -361,7 +398,7 @@ contract DepositModule is CoreModule {
         bytes memory _payload = abi.encode(
             CREATE_DUEL_SELECTOR,
             _newDuel,
-            ///@follow-up remember to remove the block.chainid + 1
+            ///@follow-up test to remove the block.chainid + 1
             block.chainid,
             msg.sender
         );

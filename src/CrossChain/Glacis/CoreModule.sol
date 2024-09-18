@@ -65,7 +65,7 @@ abstract contract CoreModule is
         uint256 deadlineTimestamp;
         address duelCreator;
         uint256 initialPrizePool;
-        bool drawAvaliable;
+        bool drawAvailable;
     }
 
     struct betDuelInput {
@@ -109,12 +109,24 @@ abstract contract CoreModule is
     error NotRouterOperator(address sender);
     error senderNotOwnerNorOperator();
     error DrawNotAvailable();
+    error notDuelManager(address);
 
     //----------------------------------------------------------------------------------------------------
     //                                               EVENTS
     //----------------------------------------------------------------------------------------------------
     event duelCreatorChanged(address indexed _address, bool indexed _allowed);
+    event cancelledDuel(
+        string _title,
+        uint256 indexed _eventDate,
+        uint256 indexed _chainId
+    );
 
+    event changedTimestamp(
+        string _title,
+        uint256 indexed _eventDate,
+        uint256 indexed _chain,
+        address indexed _module
+    );
     event changedModule(uint256 indexed _chain, address indexed _module);
     event changedChain(uint256 indexed _Modulechain, uint256 indexed _dstChain);
     event feeTaken(

@@ -613,7 +613,6 @@ contract DuelStakesL0 is CoreModule {
         );
     }
 
-    // @note check if timestamps in all chains are equeal
     function _createDuel(
         CoreModule.CreateDuelInput memory _newDuel,
         uint256 _chainId

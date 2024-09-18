@@ -28,6 +28,13 @@ contract DuelStakesL0 is CoreModule {
 
     struct betDuel {
         pickOpts releaseReward;
+        duelInfo info;
+        prizes prizepool;
+        mapping(address => bool) userClaimed; //math to do is total pooled on (pooledAmount/winner)*totalprizepool = (pooledAmount*totalprizepool/winner)
+        mapping(address => mapping(uint256 chainId => deposit)) userDeposits;
+    }
+
+    struct duelInfo {
         bool blockedDuel;
         string duelTitle;
         string duelDescription;
@@ -35,14 +42,14 @@ contract DuelStakesL0 is CoreModule {
         uint128 eventTimestamp;
         uint128 deadlineTimestamp;
         uint256 chainId;
-        mapping(uint256 chainId => address) duelCreator;
+        address duelCreator;
+    }
+    struct prizes {
         uint256 totalPrizePool; //opt 0 -> totalPrizePool - opt1 - opt2 - opt3 + unclaimedPrizePool == garantido
         uint256 opt1PrizePool;
         uint256 opt2PrizePool;
         uint256 opt3PrizePool;
         uint256 unclaimedPrizePool; //garantido quando bet em andamento && nao claimed quando bet fechada
-        mapping(address => bool) userClaimed; //math to do is total pooled on (pooledAmount/winner)*totalprizepool = (pooledAmount*totalprizepool/winner)
-        mapping(address => mapping(uint256 chainId => deposit)) userDeposits;
     }
 
     //----------------------------------------------------------------------------------------------------
@@ -83,17 +90,17 @@ contract DuelStakesL0 is CoreModule {
     //----------------------------------------------------------------------------------------------------
 
     modifier notBlocked(string calldata _title, uint256 _eventDate) {
-        if (duels[keccak256(abi.encode(_eventDate, _title))].blockedDuel)
+        if (duels[keccak256(abi.encode(_eventDate, _title))].info.blockedDuel)
             revert duelIsBlocked();
         _;
     }
     modifier notBlockedMemory(string memory _title, uint256 _eventDate) {
-        if (duels[keccak256(abi.encode(_eventDate, _title))].blockedDuel)
+        if (duels[keccak256(abi.encode(_eventDate, _title))].info.blockedDuel)
             revert duelIsBlocked();
         _;
     }
     modifier notBlockedBytes32(bytes32 _id) {
-        if (duels[_id].blockedDuel) revert duelIsBlocked();
+        if (duels[_id].info.blockedDuel) revert duelIsBlocked();
         _;
     }
 
@@ -126,8 +133,7 @@ contract DuelStakesL0 is CoreModule {
     //----------------------------------------------------------------------------------------------------
     //                                           DUELS EMERGENCY PROTOCOL
     //----------------------------------------------------------------------------------------------------
-    //@note CREATE A CANCEL BET
-    //@note CREATE A MODIFY TIMESTAMP
+    //@note CREATE A CANCEL BET // DO THE CROSSCHAIN UNLOCK FUNDS (backend system)
     function emergencyWithdraw(
         string calldata _title,
         uint256 _eventDate
@@ -136,22 +142,58 @@ contract DuelStakesL0 is CoreModule {
 
         bool success = _paymentToken.transfer(
             _treasuryAccount,
-            _aux.unclaimedPrizePool
+            _aux.prizepool.unclaimedPrizePool
         );
         if (!success) revert transferDidNotSucceed();
 
         _aux.releaseReward = pickOpts.none;
-        _aux.blockedDuel = true;
-        _aux.unclaimedPrizePool = 0;
+        _aux.info.blockedDuel = true;
+        _aux.prizepool.unclaimedPrizePool = 0;
 
         emit emergencyBlock(_title, _eventDate);
+    }
+
+    function cancelDuel(string calldata _title, uint256 _eventDate) public {
+        betDuel storage _aux = _checkDuelExistence(_title, _eventDate);
+
+        if ((msg.sender != owner()) && (msg.sender != _aux.info.duelCreator))
+            revert notDuelManager(msg.sender);
+
+        _releaseGuaranteed(
+            _title,
+            _eventDate,
+            _aux.prizepool.unclaimedPrizePool,
+            _aux.info.chainId
+        );
+
+        _aux.releaseReward = pickOpts.none;
+        _aux.info.blockedDuel = true;
+        _aux.prizepool.unclaimedPrizePool = _aux.prizepool.totalPrizePool;
+
+        emit cancelledDuel(_title, _eventDate, _aux.info.chainId);
+    }
+
+    function changeTimestamp(
+        string calldata _title,
+        uint256 _eventDate,
+        uint128 _deadline,
+        uint128 _eventTimestamp
+    ) public {
+        betDuel storage _aux = _checkDuelExistence(_title, _eventDate);
+
+        if ((msg.sender != owner()) && (msg.sender != _aux.info.duelCreator))
+            revert notDuelManager(msg.sender);
+
+        _aux.info.deadlineTimestamp = _deadline;
+        _aux.info.eventTimestamp = _eventTimestamp;
+
+        emit changedTimestamp(_title, _eventDate, block.chainid, address(this));
     }
 
     //----------------------------------------------------------------------------------------------------
     //                                               DUELS CREATION
     //----------------------------------------------------------------------------------------------------
 
-    //@note create a no Draw option
     function createDuel(
         CoreModule.CreateDuelInput calldata _newDuel
     ) public onlyCreator whenNotPaused {
@@ -191,7 +233,7 @@ contract DuelStakesL0 is CoreModule {
     ) public payable notBlocked(_title, _eventDate) whenNotPaused {
         betDuel storage _aux = _checkDuelExistence(_title, _eventDate);
         require(
-            block.timestamp <= _aux.deadlineTimestamp,
+            block.timestamp <= _aux.info.deadlineTimestamp,
             "Bet not possible due to time limit"
         );
         _checkAmount(_amount);
@@ -199,25 +241,27 @@ contract DuelStakesL0 is CoreModule {
         _depositPick(_amount, _option, msg.sender, _aux, block.chainid);
 
         if (
-            _aux.unclaimedPrizePool <= _aux.totalPrizePool &&
-            _aux.unclaimedPrizePool != 0 &&
-            _aux.duelCreator[block.chainid] != address(0)
+            _aux.prizepool.unclaimedPrizePool <=
+            _aux.prizepool.totalPrizePool &&
+            _aux.prizepool.unclaimedPrizePool != 0 &&
+            _aux.info.duelCreator != address(0)
         ) {
             bool success = _paymentToken.transfer(
-                _aux.duelCreator[block.chainid],
-                _aux.unclaimedPrizePool
+                _aux.info.duelCreator,
+                _aux.prizepool.unclaimedPrizePool
             );
             if (!success) revert transferDidNotSucceed();
-            _aux.unclaimedPrizePool = 0;
+            _aux.prizepool.unclaimedPrizePool = 0;
         } else if (
-            _aux.unclaimedPrizePool <= _aux.totalPrizePool &&
-            _aux.unclaimedPrizePool != 0
+            _aux.prizepool.unclaimedPrizePool <=
+            _aux.prizepool.totalPrizePool &&
+            _aux.prizepool.unclaimedPrizePool != 0
         ) {
             _releaseGuaranteed(
                 _title,
                 _eventDate,
-                _aux.unclaimedPrizePool,
-                _aux.chainId
+                _aux.prizepool.unclaimedPrizePool,
+                _aux.info.chainId
             );
         }
 
@@ -242,41 +286,42 @@ contract DuelStakesL0 is CoreModule {
     ) public payable ownerOrRouterOrController {
         betDuel storage _aux = _checkDuelExistence(_title, _eventDate);
         require(
-            _aux.eventTimestamp <= block.timestamp,
+            _aux.info.eventTimestamp <= block.timestamp,
             "event did not happen yet"
         );
         if (
-            _aux.totalPrizePool < _aux.unclaimedPrizePool &&
-            _aux.totalPrizePool > 0 &&
-            _aux.chainId == block.chainid
+            _aux.prizepool.totalPrizePool < _aux.prizepool.unclaimedPrizePool &&
+            _aux.prizepool.totalPrizePool > 0 &&
+            _aux.info.chainId == block.chainid
         ) {
             bool success = _paymentToken.transfer(
-                _aux.duelCreator[block.chainid],
-                _aux.totalPrizePool
+                _aux.info.duelCreator,
+                _aux.prizepool.totalPrizePool
             );
             if (!success) revert transferDidNotSucceed();
-            _aux.totalPrizePool = _aux.unclaimedPrizePool;
+            _aux.prizepool.totalPrizePool = _aux.prizepool.unclaimedPrizePool;
             _5percent(_aux);
         } else if (
-            _aux.totalPrizePool < _aux.unclaimedPrizePool &&
-            _aux.totalPrizePool > 0
+            _aux.prizepool.totalPrizePool < _aux.prizepool.unclaimedPrizePool &&
+            _aux.prizepool.totalPrizePool > 0
         ) {
             _releaseGuaranteed(
                 _title,
                 _eventDate,
-                _aux.unclaimedPrizePool - _aux.totalPrizePool,
-                _aux.chainId
+                _aux.prizepool.unclaimedPrizePool -
+                    _aux.prizepool.totalPrizePool,
+                _aux.info.chainId
             );
-            _aux.totalPrizePool = _aux.unclaimedPrizePool;
+            _aux.prizepool.totalPrizePool = _aux.prizepool.unclaimedPrizePool;
         }
         _aux.releaseReward = _winner;
-        _aux.unclaimedPrizePool = _aux.totalPrizePool;
+        _aux.prizepool.unclaimedPrizePool = _aux.prizepool.totalPrizePool;
         emit betClosed(
             _title,
             _eventDate,
             _winner,
-            _aux.chainId,
-            _aux.totalPrizePool
+            _aux.info.chainId,
+            _aux.prizepool.totalPrizePool
         );
     }
 
@@ -328,7 +373,7 @@ contract DuelStakesL0 is CoreModule {
         uint256 _timestamp
     ) public view returns (bool) {
         bytes32 _id = keccak256(abi.encode(_timestamp, _title));
-        return duels[_id].blockedDuel;
+        return duels[_id].info.blockedDuel;
     }
 
     function getDuelTitleAndDescrition(
@@ -337,9 +382,9 @@ contract DuelStakesL0 is CoreModule {
     ) public view returns (string memory, string memory, string memory) {
         bytes32 _id = keccak256(abi.encode(_timestamp, _title));
         return (
-            duels[_id].duelTitle,
-            duels[_id].duelDescription,
-            duels[_id].eventTitle
+            duels[_id].info.duelTitle,
+            duels[_id].info.duelDescription,
+            duels[_id].info.eventTitle
         );
     }
 
@@ -348,7 +393,10 @@ contract DuelStakesL0 is CoreModule {
         uint256 _timestamp
     ) public view returns (uint256, uint256) {
         bytes32 _id = keccak256(abi.encode(_timestamp, _title));
-        return (duels[_id].eventTimestamp, duels[_id].deadlineTimestamp);
+        return (
+            duels[_id].info.eventTimestamp,
+            duels[_id].info.deadlineTimestamp
+        );
     }
 
     function getPrizes(
@@ -357,11 +405,11 @@ contract DuelStakesL0 is CoreModule {
     ) public view returns (uint256, uint256, uint256, uint256, uint256) {
         bytes32 _id = keccak256(abi.encode(_timestamp, _title));
         return (
-            duels[_id].totalPrizePool,
-            duels[_id].opt1PrizePool,
-            duels[_id].opt2PrizePool,
-            duels[_id].opt3PrizePool,
-            duels[_id].unclaimedPrizePool
+            duels[_id].prizepool.totalPrizePool,
+            duels[_id].prizepool.opt1PrizePool,
+            duels[_id].prizepool.opt2PrizePool,
+            duels[_id].prizepool.opt3PrizePool,
+            duels[_id].prizepool.unclaimedPrizePool
         );
     }
 
@@ -370,7 +418,7 @@ contract DuelStakesL0 is CoreModule {
         uint256 _timestamp
     ) public view returns (address) {
         bytes32 _id = keccak256(abi.encode(_timestamp, _title));
-        return (duels[_id].duelCreator[block.chainid]);
+        return (duels[_id].info.duelCreator);
     }
 
     function getDuelChainId(
@@ -378,7 +426,7 @@ contract DuelStakesL0 is CoreModule {
         uint256 _timestamp
     ) public view returns (uint256) {
         bytes32 _id = keccak256(abi.encode(_timestamp, _title));
-        return (duels[_id].chainId);
+        return (duels[_id].info.chainId);
     }
 
     function getUserClaimed(
@@ -414,7 +462,7 @@ contract DuelStakesL0 is CoreModule {
     ) internal view returns (betDuel storage _aux) {
         _aux = duels[keccak256(abi.encode(_timestamp, _title))];
         if (
-            keccak256(abi.encodePacked(_aux.duelTitle)) !=
+            keccak256(abi.encodePacked(_aux.info.duelTitle)) !=
             keccak256(abi.encodePacked(_title))
         ) revert duelDoesNotExist();
     }
@@ -424,7 +472,7 @@ contract DuelStakesL0 is CoreModule {
     ) internal view returns (betDuel storage _aux) {
         _aux = duels[_id];
         if (
-            keccak256(abi.encodePacked(_aux.duelTitle)) ==
+            keccak256(abi.encodePacked(_aux.info.duelTitle)) ==
             keccak256(abi.encodePacked(""))
         ) revert duelDoesNotExist();
     }
@@ -436,16 +484,16 @@ contract DuelStakesL0 is CoreModule {
         betDuel storage _aux = duels[
             keccak256(abi.encode(_newDuel.eventTimestamp, _newDuel.duelTitle))
         ];
-        _aux.duelTitle = _newDuel.duelTitle;
-        _aux.eventTitle = _newDuel.eventTitle;
-        _aux.duelDescription = _newDuel.duelDescription;
-        _aux.duelCreator[_chainId] = _newDuel.duelCreator;
-        _aux.deadlineTimestamp = uint128(_newDuel.deadlineTimestamp);
-        _aux.eventTimestamp = uint128(_newDuel.eventTimestamp);
-        _aux.unclaimedPrizePool = _newDuel.initialPrizePool;
-        _aux.chainId = _chainId;
-        if (!_newDuel.drawAvaliable) {
-            _aux.opt2PrizePool = type(uint256).max;
+        _aux.info.duelTitle = _newDuel.duelTitle;
+        _aux.info.eventTitle = _newDuel.eventTitle;
+        _aux.info.duelDescription = _newDuel.duelDescription;
+        _aux.info.duelCreator = _newDuel.duelCreator;
+        _aux.info.deadlineTimestamp = uint128(_newDuel.deadlineTimestamp);
+        _aux.info.eventTimestamp = uint128(_newDuel.eventTimestamp);
+        _aux.prizepool.unclaimedPrizePool = _newDuel.initialPrizePool;
+        _aux.info.chainId = _chainId;
+        if (!_newDuel.drawAvailable) {
+            _aux.prizepool.opt2PrizePool = type(uint256).max;
         }
     }
 
@@ -462,22 +510,22 @@ contract DuelStakesL0 is CoreModule {
         uint256 chainId
     ) internal {
         if (_pick == pickOpts.opt1) {
-            _duel.totalPrizePool += _amount;
-            _duel.opt1PrizePool += _amount;
+            _duel.prizepool.totalPrizePool += _amount;
+            _duel.prizepool.opt1PrizePool += _amount;
             _duel.userDeposits[sender][chainId]._amountOp1 += _amount;
         } else if (_pick == pickOpts.opt2) {
-            if (_duel.opt2PrizePool == type(uint256).max)
+            if (_duel.prizepool.opt2PrizePool == type(uint256).max)
                 revert DrawNotAvailable();
-            _duel.totalPrizePool += _amount;
-            _duel.opt2PrizePool += _amount;
+            _duel.prizepool.totalPrizePool += _amount;
+            _duel.prizepool.opt2PrizePool += _amount;
             _duel.userDeposits[sender][chainId]._amountOp2 += _amount;
         } else if (_pick == pickOpts.opt3) {
-            _duel.totalPrizePool += _amount;
-            _duel.opt3PrizePool += _amount;
+            _duel.prizepool.totalPrizePool += _amount;
+            _duel.prizepool.opt3PrizePool += _amount;
             _duel.userDeposits[sender][chainId]._amountOp3 += _amount;
         } else if (_pick == pickOpts.none) {
             //@note THIS OPTIONS DOES NOT INTAKE POINTS
-            _duel.totalPrizePool += _amount;
+            _duel.prizepool.totalPrizePool += _amount;
         } else {
             revert pickNotAvailable();
         }
@@ -490,26 +538,35 @@ contract DuelStakesL0 is CoreModule {
         if (_duel.releaseReward == pickOpts.opt1) {
             _payment =
                 (_duel.userDeposits[_claimer][block.chainid]._amountOp1 *
-                    _duel.totalPrizePool) /
-                _duel.opt1PrizePool;
+                    _duel.prizepool.totalPrizePool) /
+                _duel.prizepool.opt1PrizePool;
             _duel.userClaimed[_claimer] = true;
-            _duel.unclaimedPrizePool -= _payment;
+            _duel.prizepool.unclaimedPrizePool -= _payment;
             _transferUserAmount(_payment);
         } else if (_duel.releaseReward == pickOpts.opt2) {
             _payment =
                 (_duel.userDeposits[_claimer][block.chainid]._amountOp2 *
-                    _duel.totalPrizePool) /
-                _duel.opt2PrizePool;
+                    _duel.prizepool.totalPrizePool) /
+                _duel.prizepool.opt2PrizePool;
             _duel.userClaimed[_claimer] = true;
-            _duel.unclaimedPrizePool -= _payment;
+            _duel.prizepool.unclaimedPrizePool -= _payment;
             _transferUserAmount(_payment);
         } else if (_duel.releaseReward == pickOpts.opt3) {
             _payment =
                 (_duel.userDeposits[_claimer][block.chainid]._amountOp2 *
-                    _duel.totalPrizePool) /
-                _duel.opt2PrizePool;
+                    _duel.prizepool.totalPrizePool) /
+                _duel.prizepool.opt2PrizePool;
             _duel.userClaimed[_claimer] = true;
-            _duel.unclaimedPrizePool -= _payment;
+            _duel.prizepool.unclaimedPrizePool -= _payment;
+            _transferUserAmount(_payment);
+        } else if (
+            _duel.releaseReward == pickOpts.none && _duel.info.blockedDuel
+        ) {
+            _payment = (_duel.userDeposits[_claimer][block.chainid]._amountOp1 +
+                _duel.userDeposits[_claimer][block.chainid]._amountOp2 +
+                _duel.userDeposits[_claimer][block.chainid]._amountOp3);
+            _duel.userClaimed[_claimer] = true;
+            _duel.prizepool.unclaimedPrizePool -= _payment;
             _transferUserAmount(_payment);
         } else {
             revert claimNotAvailable();
@@ -517,25 +574,22 @@ contract DuelStakesL0 is CoreModule {
     }
 
     function _5percent(betDuel storage _duel) internal {
-        uint256 _pay = (_duel.totalPrizePool * 300) / 10000;
+        uint256 _pay = (_duel.prizepool.totalPrizePool * 300) / 10000;
         bool success = _paymentToken.transfer(_treasuryAccount, _pay);
         if (!success) revert transferDidNotSucceed();
         emit feeTaken(_treasuryAccount, _pay, block.chainid);
 
-        _pay = (_duel.totalPrizePool * 100) / 10000;
+        _pay = (_duel.prizepool.totalPrizePool * 100) / 10000;
         success = _paymentToken.transfer(_operationManager, _pay);
         if (!success) revert transferDidNotSucceed();
         emit feeTaken(_operationManager, _pay, block.chainid);
 
-        _pay = (_duel.totalPrizePool * 100) / 10000;
-        success = _paymentToken.transfer(
-            _duel.duelCreator[block.chainid],
-            _pay
-        );
+        _pay = (_duel.prizepool.totalPrizePool * 100) / 10000;
+        success = _paymentToken.transfer(_duel.info.duelCreator, _pay);
         if (!success) revert transferDidNotSucceed();
-        emit feeTaken(_duel.duelCreator[block.chainid], _pay, block.chainid);
+        emit feeTaken(_duel.info.duelCreator, _pay, block.chainid);
 
-        _duel.totalPrizePool -= (_pay * 5);
+        _duel.prizepool.totalPrizePool -= (_pay * 5);
     }
 
     //----------------------------------------------------------------------------------------------------
@@ -587,40 +641,45 @@ contract DuelStakesL0 is CoreModule {
     ) internal notBlockedBytes32(_id) whenNotPaused {
         betDuel storage _aux = _checkDuelExistence(_id);
         require(
-            block.timestamp <= _aux.deadlineTimestamp,
+            block.timestamp <= _aux.info.deadlineTimestamp,
             "Bet not possible due to time limit"
         );
         _depositPick(_amount, _option, _user, _aux, _chainId);
 
         if (
-            _aux.unclaimedPrizePool <= _aux.totalPrizePool &&
-            _aux.unclaimedPrizePool != 0 &&
-            _aux.duelCreator[block.chainid] != address(0)
+            _aux.prizepool.unclaimedPrizePool <=
+            _aux.prizepool.totalPrizePool &&
+            _aux.prizepool.unclaimedPrizePool != 0 &&
+            _aux.info.duelCreator != address(0)
         ) {
             bool success = _paymentToken.transfer(
-                _aux.duelCreator[block.chainid],
-                _aux.unclaimedPrizePool
+                _aux.info.duelCreator,
+                _aux.prizepool.unclaimedPrizePool
             );
             if (!success) revert transferDidNotSucceed();
-            _aux.unclaimedPrizePool = 0;
+            _aux.prizepool.unclaimedPrizePool = 0;
         } else if (
-            _aux.unclaimedPrizePool <= _aux.totalPrizePool &&
-            _aux.unclaimedPrizePool != 0
+            _aux.prizepool.unclaimedPrizePool <=
+            _aux.prizepool.totalPrizePool &&
+            _aux.prizepool.unclaimedPrizePool != 0
         ) {
-            _releaseGuaranteed(_id, _aux.unclaimedPrizePool, _aux.chainId);
+            _releaseGuaranteed(
+                _id,
+                _aux.prizepool.unclaimedPrizePool,
+                _aux.info.chainId
+            );
         }
 
         emit duelBet(
             _user,
             _amount,
             _option,
-            _aux.duelTitle,
-            _aux.eventTimestamp,
+            _aux.info.duelTitle,
+            _aux.info.eventTimestamp,
             _chainId
         );
     }
 
-    // @note check if timestamps in all chains are equeal
     function _createDuel(
         CoreModule.CreateDuelInput memory _newDuel,
         uint256 _chainId
