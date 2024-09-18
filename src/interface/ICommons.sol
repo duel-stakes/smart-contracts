@@ -40,6 +40,6 @@ abstract contract ICommons {
         uint256 deadlineTimestamp;
         address duelCreator;
         uint256 initialPrizePool;
-        bool drawAvaliable;
+        bool drawAvailable;
     }
 }

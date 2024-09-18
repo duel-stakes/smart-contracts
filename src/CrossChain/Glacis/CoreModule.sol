@@ -44,17 +44,6 @@ abstract contract CoreModule is
     //                                        STRUCTS
     //----------------------------------------------------------------------------------------------------
 
-    struct CreateDuelInput {
-        string duelTitle;
-        string duelDescription;
-        string eventTitle;
-        uint256 eventTimestamp;
-        uint256 deadlineTimestamp;
-        address duelCreator;
-        uint256 initialPrizePool;
-        bool drawAvailable;
-    }
-
     struct deposit {
         uint256 _amountOp1;
         uint256 _amountOp2;
