@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.2;
-import {CoreModule} from "./CoreModule.sol";
+import {CoreModule, ICommons} from "./CoreModule.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -626,7 +626,7 @@ contract DuelStakesL0 is CoreModule {
 
             ) = abi.decode(
                     payload,
-                    (bytes4, CoreModule.CreateDuelInput, uint256, address)
+                    (bytes4, ICommons.CreateDuelInput, uint256, address)
                 );
             _createDuel(_newDuel, chainId);
         }

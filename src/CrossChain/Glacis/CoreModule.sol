@@ -5,11 +5,13 @@ import {GlacisClientOwnable} from "@glacis/client/GlacisClientOwnable.sol";
 import {UUPSUpgradeable, ERC1967Utils} from "lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {Initializable} from "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {ICommons} from "../../interface/ICommons.sol";
 
 abstract contract CoreModule is
     GlacisClientOwnable,
     UUPSUpgradeable,
-    Initializable
+    Initializable,
+    ICommons
 {
     //----------------------------------------------------------------------------------------------------
     //                                               STORAGE
@@ -38,21 +40,6 @@ abstract contract CoreModule is
     //----------------------------------------------------------------------------------------------------
     address mainAdapter;
 
-    bytes4 public constant BET_ON_DUEL_SELECTOR =
-        bytes4(
-            keccak256(
-                "_betOnDuel(string,uint256,uint8,uint256,uint256,address)"
-            )
-        );
-    bytes4 public constant CREATE_DUEL_SELECTOR =
-        bytes4(
-            keccak256(
-                "_createDuel((string,string,string,uint256,uint256,address,uint256),uint256)"
-            )
-        );
-    bytes4 public constant RELEASE_DUEL_GUARANTEED =
-        bytes4(keccak256("_releaseGuarateed(bytes32,uint256)"));
-
     //----------------------------------------------------------------------------------------------------
     //                                        STRUCTS
     //----------------------------------------------------------------------------------------------------
@@ -68,27 +55,10 @@ abstract contract CoreModule is
         bool drawAvailable;
     }
 
-    struct betDuelInput {
-        string duelTitle;
-        string duelDescription;
-        string eventTitle;
-        uint256 eventTimestamp;
-        uint256 deadlineTimestamp;
-        address duelCreator;
-        uint256 initialPrizePool;
-    }
-
     struct deposit {
         uint256 _amountOp1;
         uint256 _amountOp2;
         uint256 _amountOp3;
-    }
-
-    enum pickOpts {
-        none,
-        opt1,
-        opt2,
-        opt3
     }
 
     //----------------------------------------------------------------------------------------------------
