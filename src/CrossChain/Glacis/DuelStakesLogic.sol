@@ -3,10 +3,11 @@ pragma solidity ^0.8.2;
 import {CoreModule, ICommons} from "./CoreModule.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 ///@author Waiandt.eth
 
-contract DuelStakesL0 is CoreModule {
+contract DuelStakesLogic is CoreModule, ReentrancyGuard {
     //----------------------------------------------------------------------------------------------------
     //                                               STORAGE
     //----------------------------------------------------------------------------------------------------
@@ -137,23 +138,25 @@ contract DuelStakesL0 is CoreModule {
     function emergencyWithdraw(
         string calldata _title,
         uint256 _eventDate
-    ) public onlyOwner {
+    ) public onlyOwner nonReentrant {
         betDuel storage _aux = _checkDuelExistence(_title, _eventDate);
 
-        bool success = _paymentToken.transfer(
-            _treasuryAccount,
-            _aux.prizepool.unclaimedPrizePool
-        );
-        if (!success) revert transferDidNotSucceed();
+        uint256 amountToTransfer = _aux.prizepool.unclaimedPrizePool;
+        _aux.prizepool.unclaimedPrizePool = 0;
+
+        if (!_paymentToken.transfer(_treasuryAccount, amountToTransfer))
+            revert transferDidNotSucceed();
 
         _aux.releaseReward = pickOpts.none;
         _aux.info.blockedDuel = true;
-        _aux.prizepool.unclaimedPrizePool = 0;
 
         emit emergencyBlock(_title, _eventDate);
     }
 
-    function cancelDuel(string calldata _title, uint256 _eventDate) public {
+    function cancelDuel(
+        string calldata _title,
+        uint256 _eventDate
+    ) public nonReentrant {
         betDuel storage _aux = _checkDuelExistence(_title, _eventDate);
 
         if ((msg.sender != owner()) && (msg.sender != _aux.info.duelCreator))
@@ -184,6 +187,15 @@ contract DuelStakesL0 is CoreModule {
         if ((msg.sender != owner()) && (msg.sender != _aux.info.duelCreator))
             revert notDuelManager(msg.sender);
 
+        require(
+            _deadline > block.timestamp,
+            "New deadline must be in the future"
+        );
+        require(
+            _eventTimestamp > _deadline,
+            "Event timestamp must be after deadline"
+        );
+
         _aux.info.deadlineTimestamp = _deadline;
         _aux.info.eventTimestamp = _eventTimestamp;
 
@@ -196,7 +208,7 @@ contract DuelStakesL0 is CoreModule {
 
     function createDuel(
         CoreModule.CreateDuelInput calldata _newDuel
-    ) public onlyCreator whenNotPaused {
+    ) public onlyCreator whenNotPaused nonReentrant {
         _checkEmpty(_newDuel.duelTitle);
         _checkEmpty(_newDuel.duelDescription);
         _checkEmpty(_newDuel.eventTitle);
@@ -230,7 +242,7 @@ contract DuelStakesL0 is CoreModule {
         uint256 _eventDate,
         pickOpts _option,
         uint256 _amount
-    ) public payable notBlocked(_title, _eventDate) whenNotPaused {
+    ) public payable notBlocked(_title, _eventDate) whenNotPaused nonReentrant {
         betDuel storage _aux = _checkDuelExistence(_title, _eventDate);
         require(
             block.timestamp <= _aux.info.deadlineTimestamp,
@@ -240,27 +252,24 @@ contract DuelStakesL0 is CoreModule {
         _transferAmount(_amount);
         _depositPick(_amount, _option, msg.sender, _aux, block.chainid);
 
+        uint256 unclaimedAmount = _aux.prizepool.unclaimedPrizePool;
         if (
-            _aux.prizepool.unclaimedPrizePool <=
-            _aux.prizepool.totalPrizePool &&
-            _aux.prizepool.unclaimedPrizePool != 0 &&
+            unclaimedAmount <= _aux.prizepool.totalPrizePool &&
+            unclaimedAmount != 0 &&
             _aux.info.duelCreator != address(0)
         ) {
-            bool success = _paymentToken.transfer(
-                _aux.info.duelCreator,
-                _aux.prizepool.unclaimedPrizePool
-            );
-            if (!success) revert transferDidNotSucceed();
             _aux.prizepool.unclaimedPrizePool = 0;
+            if (!_paymentToken.transfer(_aux.info.duelCreator, unclaimedAmount))
+                revert transferDidNotSucceed();
         } else if (
-            _aux.prizepool.unclaimedPrizePool <=
-            _aux.prizepool.totalPrizePool &&
-            _aux.prizepool.unclaimedPrizePool != 0
+            unclaimedAmount <= _aux.prizepool.totalPrizePool &&
+            unclaimedAmount != 0
         ) {
+            _aux.prizepool.unclaimedPrizePool = 0;
             _releaseGuaranteed(
                 _title,
                 _eventDate,
-                _aux.prizepool.unclaimedPrizePool,
+                unclaimedAmount,
                 _aux.info.chainId
             );
         }
@@ -283,7 +292,7 @@ contract DuelStakesL0 is CoreModule {
         string calldata _title,
         uint256 _eventDate,
         pickOpts _winner
-    ) public payable ownerOrRouterOrController {
+    ) public payable ownerOrRouterOrController nonReentrant {
         betDuel storage _aux = _checkDuelExistence(_title, _eventDate);
         require(
             _aux.info.eventTimestamp <= block.timestamp,
@@ -294,25 +303,25 @@ contract DuelStakesL0 is CoreModule {
             _aux.prizepool.totalPrizePool > 0 &&
             _aux.info.chainId == block.chainid
         ) {
-            bool success = _paymentToken.transfer(
-                _aux.info.duelCreator,
-                _aux.prizepool.totalPrizePool
-            );
-            if (!success) revert transferDidNotSucceed();
+            uint256 amountToTransfer = _aux.prizepool.totalPrizePool;
             _aux.prizepool.totalPrizePool = _aux.prizepool.unclaimedPrizePool;
+            if (
+                !_paymentToken.transfer(_aux.info.duelCreator, amountToTransfer)
+            ) revert transferDidNotSucceed();
             _5percent(_aux);
         } else if (
             _aux.prizepool.totalPrizePool < _aux.prizepool.unclaimedPrizePool &&
             _aux.prizepool.totalPrizePool > 0
         ) {
+            uint256 amountToRelease = _aux.prizepool.unclaimedPrizePool -
+                _aux.prizepool.totalPrizePool;
+            _aux.prizepool.totalPrizePool = _aux.prizepool.unclaimedPrizePool;
             _releaseGuaranteed(
                 _title,
                 _eventDate,
-                _aux.prizepool.unclaimedPrizePool -
-                    _aux.prizepool.totalPrizePool,
+                amountToRelease,
                 _aux.info.chainId
             );
-            _aux.prizepool.totalPrizePool = _aux.prizepool.unclaimedPrizePool;
         }
         _aux.releaseReward = _winner;
         _aux.prizepool.unclaimedPrizePool = _aux.prizepool.totalPrizePool;
@@ -328,7 +337,7 @@ contract DuelStakesL0 is CoreModule {
     function claimBet(
         string calldata _title,
         uint256 _eventDate
-    ) public notBlocked(_title, _eventDate) whenNotPaused {
+    ) public notBlocked(_title, _eventDate) whenNotPaused nonReentrant {
         betDuel storage _aux = _checkDuelExistence(_title, _eventDate);
         require(!_aux.userClaimed[msg.sender], "User already claimed");
         uint256 _payment = _updateClaim(_aux, msg.sender);
@@ -498,8 +507,8 @@ contract DuelStakesL0 is CoreModule {
     }
 
     function _transferUserAmount(uint256 _amount) internal {
-        bool success = _paymentToken.transfer(msg.sender, _amount);
-        if (!success) revert transferDidNotSucceed();
+        if (!_paymentToken.transfer(msg.sender, _amount))
+            revert transferDidNotSucceed();
     }
 
     function _depositPick(
@@ -575,18 +584,18 @@ contract DuelStakesL0 is CoreModule {
 
     function _5percent(betDuel storage _duel) internal {
         uint256 _pay = (_duel.prizepool.totalPrizePool * 300) / 10000;
-        bool success = _paymentToken.transfer(_treasuryAccount, _pay);
-        if (!success) revert transferDidNotSucceed();
+        if (!_paymentToken.transfer(_treasuryAccount, _pay))
+            revert transferDidNotSucceed();
         emit feeTaken(_treasuryAccount, _pay, block.chainid);
 
         _pay = (_duel.prizepool.totalPrizePool * 100) / 10000;
-        success = _paymentToken.transfer(_operationManager, _pay);
-        if (!success) revert transferDidNotSucceed();
+        if (!_paymentToken.transfer(_operationManager, _pay))
+            revert transferDidNotSucceed();
         emit feeTaken(_operationManager, _pay, block.chainid);
 
         _pay = (_duel.prizepool.totalPrizePool * 100) / 10000;
-        success = _paymentToken.transfer(_duel.info.duelCreator, _pay);
-        if (!success) revert transferDidNotSucceed();
+        if (!_paymentToken.transfer(_duel.info.duelCreator, _pay))
+            revert transferDidNotSucceed();
         emit feeTaken(_duel.info.duelCreator, _pay, block.chainid);
 
         _duel.prizepool.totalPrizePool -= (_pay * 5);
@@ -652,11 +661,12 @@ contract DuelStakesL0 is CoreModule {
             _aux.prizepool.unclaimedPrizePool != 0 &&
             _aux.info.duelCreator != address(0)
         ) {
-            bool success = _paymentToken.transfer(
-                _aux.info.duelCreator,
-                _aux.prizepool.unclaimedPrizePool
-            );
-            if (!success) revert transferDidNotSucceed();
+            if (
+                !_paymentToken.transfer(
+                    _aux.info.duelCreator,
+                    _aux.prizepool.unclaimedPrizePool
+                )
+            ) revert transferDidNotSucceed();
             _aux.prizepool.unclaimedPrizePool = 0;
         } else if (
             _aux.prizepool.unclaimedPrizePool <=
